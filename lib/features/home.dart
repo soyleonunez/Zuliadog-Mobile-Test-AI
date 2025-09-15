@@ -1,457 +1,388 @@
+// home.dart
 import 'package:flutter/material.dart';
 
-/// =====================
-///  HOME (pantalla completa)
-/// =====================
-class HomeView extends StatelessWidget {
-  const HomeView({super.key});
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Zuliadog Dashboard')),
-      body: const HomeBody(), // usamos el cuerpo reutilizable
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
-        icon: const Icon(Icons.add),
-        label: const Text('Nuevo'),
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: _Breadcrumb(),
+        actions: const [
+          _TopSearch(width: 320),
+          SizedBox(width: 8),
+          _IconBtn(icon: Icons.notifications_none_rounded),
+          SizedBox(width: 8),
+          _AvatarBtn(),
+          SizedBox(width: 16),
+        ],
       ),
+      body: const HomeBody(),
     );
   }
 }
 
-/// =====================
-///  HOME BODY (para incrustar en shells)
-/// =====================
 class HomeBody extends StatelessWidget {
   const HomeBody({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: ListView(
+              children: const [
+                _WelcomeHeader(),
+                SizedBox(height: 24),
+                _QuickActions(),
+                SizedBox(height: 24),
+                _ResourcesCard(),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          const SizedBox(
+            width: 380,
+            child: _RightColumn(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Breadcrumb extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme;
+    return Row(children: [
+      const SizedBox(width: 16),
+      Text('Zuliadog', style: style.bodyMedium?.copyWith(color: Colors.indigo)),
+      const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+      Text('Home', style: style.bodyMedium?.copyWith(color: Colors.black87)),
+    ]);
+  }
+}
+
+class _TopSearch extends StatelessWidget {
+  final double width;
+  const _TopSearch({required this.width});
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'Buscar pacientes, documentos...',
+          prefixIcon: const Icon(Icons.search),
+          filled: true,
+          fillColor: const Color(0xFFF3F4F6),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+        ),
+      ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  const _IconBtn({required this.icon});
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: () {},
+      icon: Icon(icon, color: Colors.grey[600]),
+      tooltip: 'Notifications',
+    );
+  }
+}
+
+class _AvatarBtn extends StatelessWidget {
+  const _AvatarBtn();
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 18,
+      backgroundImage: const AssetImage('Assets/Images/App.png'),
+      backgroundColor: Colors.grey[200],
+    );
+  }
+}
+
+class _WelcomeHeader extends StatelessWidget {
+  const _WelcomeHeader();
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Hola, Doctora',
+          style: style.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 4),
+      Text('Aquí tienes un resumen de tu día.',
+          style: style.bodyMedium?.copyWith(color: Colors.grey[600])),
+    ]);
+  }
+}
+
+class _QuickActions extends StatelessWidget {
+  const _QuickActions();
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
       children: const [
-        _Header(),
-        SizedBox(height: 16),
-        _KpiGrid(),
-        SizedBox(height: 16),
-        _RevenueCard(),
-        SizedBox(height: 16),
-        _PieAndPerf(),
-        SizedBox(height: 16),
-        _TransactionsCard(),
-        SizedBox(height: 24),
+        QuickActionCard(icon: Icons.pets, label: 'Pacientes'),
+        QuickActionCard(
+            icon: Icons.medical_services_outlined, label: 'Historias'),
+        QuickActionCard(icon: Icons.receipt_long_outlined, label: 'Recetas'),
+        QuickActionCard(icon: Icons.local_library_outlined, label: 'Recursos'),
+        QuickActionCard(icon: Icons.folder_open_outlined, label: 'Archivos'),
       ],
     );
   }
 }
 
-/// ===================== Secciones =====================
-
-class _Header extends StatelessWidget {
-  const _Header();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final isWide = c.maxWidth > 720;
-            final left = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Bienvenido 👋', style: t.headlineSmall),
-                const SizedBox(height: 6),
-                Text(
-                  'Resumen de actividad y métricas clave',
-                  style: t.bodyMedium?.copyWith(color: Colors.grey[700]),
-                ),
-              ],
-            );
-
-            final right = Wrap(
-              spacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.download_outlined),
-                  label: const Text('Exportar'),
-                ),
-                FilledButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.trending_up),
-                  label: const Text('Crear reporte'),
-                ),
-              ],
-            );
-
-            return isWide
-                ? Row(children: [left, const Spacer(), right])
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [left, const SizedBox(height: 12), right],
-                  );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _KpiGrid extends StatelessWidget {
-  const _KpiGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    const data = [
-      ('Pacientes', '128', Icons.pets),
-      ('Citas hoy', '14', Icons.event_available),
-      ('Docs subidos', '56', Icons.folder_shared),
-      ('Tickets abiertos', '7', Icons.receipt_long),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final cross = c.maxWidth >= 1100 ? 4 : (c.maxWidth >= 720 ? 2 : 1);
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: data.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cross,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 2.6,
-          ),
-          itemBuilder: (_, i) => _KpiCard(
-            title: data[i].$1,
-            value: data[i].$2,
-            icon: data[i].$3,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _KpiCard extends StatelessWidget {
-  final String title;
-  final String value;
+class QuickActionCard extends StatelessWidget {
   final IconData icon;
-  const _KpiCard(
-      {required this.title, required this.value, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: scheme.onPrimaryContainer),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: t.labelLarge?.copyWith(color: Colors.grey[700])),
-                  const SizedBox(height: 4),
-                  Text(value,
-                      style: t.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_outward, color: Colors.grey[500]),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RevenueCard extends StatelessWidget {
-  const _RevenueCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
-
-    // Placeholder de gráfico sin libs
-    Widget miniChart() => Container(
-          height: 140,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              colors: [
-                scheme.primaryContainer,
-                scheme.secondaryContainer,
-              ],
-              begin: Alignment.bottomLeft,
-              end: Alignment.topRight,
-            ),
-          ),
-          child: const Center(child: Icon(Icons.show_chart)),
-        );
-
-    Widget leftContent() => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Ingresos del mes', style: t.titleLarge),
-            const SizedBox(height: 8),
-            Text('Comparativa vs. mes anterior',
-                style: t.bodyMedium?.copyWith(color: Colors.grey[700])),
-            const SizedBox(height: 16),
-            Text('\$ 12,430',
-                style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(Icons.arrow_upward, size: 18, color: scheme.primary),
-                const SizedBox(width: 4),
-                Text('+8.2%',
-                    style: t.bodyMedium?.copyWith(color: scheme.primary)),
-                const SizedBox(width: 10),
-                Text('vs. \$11,480',
-                    style: t.bodySmall?.copyWith(color: Colors.grey[600])),
-              ],
-            ),
-          ],
-        );
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final isWide = c.maxWidth > 900;
-
-            if (isWide) {
-              return Row(
-                children: [
-                  Expanded(flex: 2, child: leftContent()),
-                  const SizedBox(width: 16),
-                  Expanded(flex: 3, child: miniChart()),
-                ],
-              );
-            } else {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  leftContent(),
-                  const SizedBox(height: 16),
-                  miniChart(),
-                ],
-              );
-            }
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _PieAndPerf extends StatelessWidget {
-  const _PieAndPerf();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final isWide = c.maxWidth > 1100;
-
-      if (isWide) {
-        return Row(
-          children: const [
-            Expanded(child: _PieCard(title: 'Servicios')),
-            SizedBox(width: 12),
-            Expanded(child: _PerfCard(title: 'Rendimiento semanal')),
-          ],
-        );
-      } else {
-        return const Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _PieCard(title: 'Servicios'),
-            SizedBox(height: 12),
-            _PerfCard(title: 'Rendimiento semanal'),
-          ],
-        );
-      }
-    });
-  }
-}
-
-class _PieCard extends StatelessWidget {
-  final String title;
-  const _PieCard({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
-
-    Widget fakePie() => Container(
-          height: 180,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: SweepGradient(colors: [
-              scheme.primaryContainer,
-              scheme.secondaryContainer,
-              scheme.tertiaryContainer,
-              scheme.primaryContainer,
-            ]),
-          ),
-          child: const Center(child: Icon(Icons.pie_chart_outline_rounded)),
-        );
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: t.titleLarge),
-          const SizedBox(height: 12),
-          fakePie(),
-          const SizedBox(height: 12),
-          const Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              _LegendDot(label: 'Consulta'),
-              _LegendDot(label: 'Vacuna'),
-              _LegendDot(label: 'Cirugía'),
-              _LegendDot(label: 'Otros'),
-            ],
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _LegendDot extends StatelessWidget {
   final String label;
-  const _LegendDot({required this.label});
+  const QuickActionCard({super.key, required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(
-            color: scheme.primary, borderRadius: BorderRadius.circular(4)),
+    return SizedBox(
+      width: 160,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {},
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 28, color: const Color(0xFF5E81F4)),
+            const SizedBox(height: 8),
+            Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+          ]),
+        ),
       ),
-      const SizedBox(width: 6),
-      Text(label),
+    );
+  }
+}
+
+class _ResourcesCard extends StatelessWidget {
+  const _ResourcesCard();
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      title: 'Recursos',
+      child: Column(children: const [
+        ResourceItemCard(
+            title: 'Guía de dosificación de medicamentos',
+            subtitle: 'Actualizado hace 2 días'),
+        SizedBox(height: 12),
+        ResourceItemCard(
+            title: 'Protocolo de anestesia para caninos',
+            subtitle: 'Actualizado hace 1 semana'),
+        SizedBox(height: 12),
+        ResourceItemCard(
+            title: 'Valores de referencia de laboratorio',
+            subtitle: 'Actualizado hace 1 mes'),
+      ]),
+    );
+  }
+}
+
+class ResourceItemCard extends StatelessWidget {
+  final String title, subtitle;
+  const ResourceItemCard(
+      {super.key, required this.title, required this.subtitle});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(children: [
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(subtitle,
+              style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        ])),
+        IconButton(onPressed: () {}, icon: const Icon(Icons.download_rounded)),
+      ]),
+    );
+  }
+}
+
+class _RightColumn extends StatelessWidget {
+  const _RightColumn();
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      children: const [
+        _Card(title: 'Calendario', child: CompactCalendar()),
+        SizedBox(height: 16),
+        _TasksPanel(),
+      ],
+    );
+  }
+}
+
+class CompactCalendar extends StatelessWidget {
+  const CompactCalendar({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final days = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        const Text('Julio 2024', style: TextStyle(fontWeight: FontWeight.w600)),
+        Row(children: [
+          _IconBtn(icon: Icons.chevron_left),
+          _IconBtn(icon: Icons.chevron_right),
+        ]),
+      ]),
+      const SizedBox(height: 8),
+      GridView.count(
+        shrinkWrap: true,
+        crossAxisCount: 7,
+        physics: const NeverScrollableScrollPhysics(),
+        children: days
+            .map((d) => Center(
+                child: Text(d,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12))))
+            .toList(),
+      ),
+      const SizedBox(height: 6),
+      GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 35,
+        gridDelegate:
+            const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7),
+        itemBuilder: (_, i) {
+          final is15 = i == 15;
+          return Center(
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: is15 ? const Color(0xFF5E81F4) : null,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              alignment: Alignment.center,
+              child: Text('${i % 31 + 1}',
+                  style: TextStyle(
+                      color: is15 ? Colors.white : Colors.black87,
+                      fontSize: 12)),
+            ),
+          );
+        },
+      ),
     ]);
   }
 }
 
-class _PerfCard extends StatelessWidget {
-  final String title;
-  const _PerfCard({required this.title});
+class _TasksPanel extends StatefulWidget {
+  const _TasksPanel();
+  @override
+  State<_TasksPanel> createState() => _TasksPanelState();
+}
 
+class _TasksPanelState extends State<_TasksPanel> {
+  final tasks = <_Task>[
+    _Task('Llamar al propietario de "Max" para seguimiento'),
+    _Task('Revisar resultados de laboratorio de "Luna"', done: true),
+    _Task('Preparar pedido de medicamentos'),
+    _Task('Esterilizar instrumental quirúrgico'),
+  ];
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
-
-    // Gradient usando withValues (no deprecado)
-    Widget trend() => Container(
-          height: 180,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              colors: [
-                scheme.primary.withValues(alpha: .15),
-                scheme.primary.withValues(alpha: .35),
-              ],
-              begin: Alignment.bottomLeft,
-              end: Alignment.topRight,
+    return _Card(
+      title: 'Tareas del día',
+      child: Column(children: [
+        for (final t in tasks)
+          CheckboxListTile(
+            value: t.done,
+            onChanged: (v) => setState(() => t.done = v ?? false),
+            title: Text(t.title,
+                style: t.done
+                    ? const TextStyle(
+                        color: Colors.grey,
+                        decoration: TextDecoration.lineThrough)
+                    : null),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.add),
+            label: const Text('Añadir Tarea'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF5E81F4),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
-          child: const Center(child: Icon(Icons.multiline_chart)),
-        );
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: t.titleLarge),
-          const SizedBox(height: 12),
-          trend(),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.arrow_upward, size: 18, color: scheme.primary),
-              const SizedBox(width: 6),
-              Text('Mejora +4.1% esta semana',
-                  style: t.bodyMedium?.copyWith(color: scheme.primary)),
-            ],
-          ),
-        ]),
-      ),
+        ),
+      ]),
     );
   }
 }
 
-class _TransactionsCard extends StatelessWidget {
-  const _TransactionsCard();
+class _Task {
+  _Task(this.title, {this.done = false});
+  final String title;
+  bool done;
+}
 
+class _Card extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _Card({required this.title, required this.child});
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final items = List.generate(
-      8,
-      (i) => (
-        'Transacción #${1000 + i}',
-        i.isEven ? 'Completada' : 'Pendiente',
-        i.isEven
-      ),
-    );
-
     return Card(
+      elevation: 0.5,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE5E7EB))),
       child: Padding(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Text('Transacciones recientes', style: t.titleLarge),
-          ),
-          const Divider(height: 1),
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) => ListTile(
-              leading: CircleAvatar(child: Text('${i + 1}')),
-              title: Text(items[i].$1),
-              subtitle: Text(items[i].$2),
-              trailing: Icon(
-                items[i].$3 ? Icons.check_circle : Icons.timelapse,
-                color: items[i].$3 ? Colors.green : Colors.orange,
-              ),
-              onTap: () {},
-            ),
-          ),
+          Text(title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          child,
         ]),
       ),
     );

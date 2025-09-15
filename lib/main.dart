@@ -16,7 +16,7 @@ class ZuliadogApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      home: const HomeView(), // <- SIEMPRE abre Home + menú
+      home: const HomePage(), // <- SIEMPRE abre Home + menú
     );
   }
 }

@@ -147,7 +147,7 @@ class _AppShellState extends State<AppShell> {
   Widget _pageForRoute(String route) {
     switch (route) {
       case '/dashboard':
-        return const HomeView(); // ← Home inmediato
+        return const HomePage(); // ← Home inmediato
       case '/patients':
         return const Scaffold(
             body: Padding(padding: EdgeInsets.all(16), child: PatientsCard()));
@@ -175,7 +175,7 @@ class _AppShellState extends State<AppShell> {
       case '/settings':
         return const _SettingsView();
       default:
-        return const HomeView();
+        return const HomePage();
     }
   }
 }
