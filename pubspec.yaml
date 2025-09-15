@@ -26,7 +26,7 @@ dependencies:
   open_file: ^3.3.2
   fluttertoast: ^8.2.4
   flutter_dotenv: ^6.0.0       # NO poner .env en assets (seguridad)
-  intl: ^0.20.2
+  intl: ^0.19.0
 
   # --- Archivos y documentos ---
   file_picker: ^10.3.3          # si prefieres, deja ^6.1.1
@@ -65,7 +65,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
@@ -80,7 +80,6 @@ flutter:
 
     - Assets/Images/App.png
     - Assets/Images/logo_icon.png
-    - Assets/Images/Logo.png
     - Assets/Images/CodigoQR.png
     - Assets/Images/phone_icon.png
     - Assets/Images/Iconohuella.png

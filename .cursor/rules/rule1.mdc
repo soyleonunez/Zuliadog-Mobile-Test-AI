@@ -1,0 +1,33 @@
+description: Reglas base del proyecto Zuliadog
+
+globs:
+
+1) Reglas del proyecto (Zuliadog) — versión corta
+
+Rol del agente: Senior Flutter/Dart. Cambios simples, seguros y mantenibles.
+
+Modularización obligatoria: reutiliza/respeta main.dart, home.dart, shell.dart, menu.dart, login.dart, docs.dart (drag&drop), visor.dart, tickets.dart, service.dart, agenda.dart, calendario.dart, buscador.dart, anim.dart.
+
+Alcance por iteración: máx 3 archivos y cambios atómicos. Siempre entrega DIFF + líneas aproximadas.
+
+Calidad: dart format + lints activas (flutter_lints o very_good_analysis). No ignorar warnings sin justificar.
+
+pubspec.yaml: no agregar/quitar deps sin explicar impacto (peso/compatibilidad). Evitar inflar el build.
+
+UI/UX: limpia y accesible; FAB para crear (mascotas/clientes/servicios); login.dart como bienvenida con Assets/Images/App.png; docs.dart con drag & drop desktop/web y fallback en mobile.
+
+Navegación: asegurar que tras login se renderice home.dart. No romper shell.
+
+Layouts: si aparece NavigationRail 'hasSize', corrige constraints (usar Expanded/Flexible/LayoutBuilder o ConstrainedBox en el padre). No reescribir toda la navegación.
+
+Tickets/Servicios: separar UI (widgets) de lógica (en service.dart).
+
+Rendimiento: usa const, ListView.builder, evita renders innecesarios.
+
+Entorno: jamás credenciales en el repo; usa .env/variables de entorno.
+
+Post-cambio: recomienda verificar con
+fvm flutter clean && fvm flutter pub get && fvm flutter analyze && fvm flutter run -d windows---
+
+alwaysApply: true
+---
