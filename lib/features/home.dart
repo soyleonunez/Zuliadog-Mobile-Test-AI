@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:zuliadog/features/data/buscador.dart';
+import 'package:zuliadog/features/data/repository.dart';
 
 /// =======================
 /// Zuliadog — Home (Desktop) v2.2 (one-file)
@@ -26,12 +28,27 @@ class _HomeScreenState extends State<HomeScreen> {
   RangeWeeks _range = RangeWeeks.w4;
   String _currentRoute = 'frame_home';
 
+  // Variables para el buscador integrado
+  final TextEditingController _searchController = TextEditingController();
+  List<PatientSearchRow> _searchResults = [];
+  bool _isSearching = false;
+  bool _showSearchResults = false;
+
+  // Repositorio de datos
+  final DataRepository _repository = DataRepository();
+
   @override
   void initState() {
     super.initState();
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) setState(() => loading = false);
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -51,79 +68,116 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.neutral50,
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        body: Stack(
           children: [
-            SizedBox(
-                width: 260,
-                child:
-                    _SideNav(activeRoute: _currentRoute, onTap: _handleNavTap)),
-            Expanded(
-              child: Column(
-                children: [
-                  const _TopBar(),
-                  const Divider(height: 1, color: AppColors.neutral200),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 24),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1600),
-                          child: _currentRoute == 'frame_home'
-                              ? Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // MAIN
-                                    Expanded(
-                                      flex: 3,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          _WelcomeHeader(
-                                            doctorName: 'Doctor/a',
-                                            onSync: () {
-                                              // Aquí irá la lógica para sincronizar con Supabase
-                                              print(
-                                                  'Sincronizando datos con Supabase...');
-                                            },
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                    width: 260,
+                    child: _SideNav(
+                        activeRoute: _currentRoute, onTap: _handleNavTap)),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _TopBar(
+                        searchController: _searchController,
+                        isSearching: _isSearching,
+                        onSearch: _performSearch,
+                        onSearchChanged: (value) {
+                          if (value.length >= 2) {
+                            _performSearch(value);
+                          } else if (value.isEmpty) {
+                            setState(() {
+                              _showSearchResults = false;
+                              _searchResults = [];
+                            });
+                          }
+                        },
+                      ),
+                      const Divider(height: 1, color: AppColors.neutral200),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 32, vertical: 24),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 1600),
+                              child: _currentRoute == 'frame_home'
+                                  ? Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // MAIN
+                                        Expanded(
+                                          flex: 3,
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              _WelcomeHeader(
+                                                doctorName: 'Doctor/a',
+                                                onSync: () {
+                                                  // Aquí irá la lógica para sincronizar con Supabase
+                                                  print(
+                                                      'Sincronizando datos con Supabase...');
+                                                },
+                                              ),
+                                              const SizedBox(height: 16),
+                                              _QuickActionsSection(),
+                                              const SizedBox(height: 16),
+                                              _ImportantSection(
+                                                  loading: loading),
+                                              const SizedBox(height: 16),
+                                              _WeeklyPerformanceCard(
+                                                loading: loading,
+                                                range: _range,
+                                                onRangeChanged: (r) =>
+                                                    setState(() => _range = r),
+                                                useRealChart: useRealChart,
+                                              ),
+                                              const SizedBox(height: 16),
+                                              _RecentActivityTable(
+                                                  loading: loading),
+                                              const SizedBox(height: 40),
+                                            ],
                                           ),
-                                          const SizedBox(height: 16),
-                                          _QuickActionsSection(),
-                                          const SizedBox(height: 16),
-                                          _ImportantSection(loading: loading),
-                                          const SizedBox(height: 16),
-                                          _WeeklyPerformanceCard(
-                                            loading: loading,
-                                            range: _range,
-                                            onRangeChanged: (r) =>
-                                                setState(() => _range = r),
-                                            useRealChart: useRealChart,
-                                          ),
-                                          const SizedBox(height: 16),
-                                          _RecentActivityTable(
-                                              loading: loading),
-                                          const SizedBox(height: 40),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    // RIGHT COLUMN
-                                    const SizedBox(
-                                        width: 320,
-                                        child: _RightColumnContent()),
-                                  ],
-                                )
-                              : _buildPageContent(_currentRoute),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        // RIGHT COLUMN
+                                        const SizedBox(
+                                            width: 320,
+                                            child: _RightColumnContent()),
+                                      ],
+                                    )
+                                  : _buildPageContent(_currentRoute),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+            // Overlay de resultados de búsqueda
+            if (_showSearchResults)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showSearchResults = false;
+                    _searchController.clear();
+                    _searchResults = [];
+                  });
+                },
+                child: Container(
+                  color: Colors.transparent,
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
+              ),
+            _buildSearchResults(),
           ],
         ),
       ),
@@ -134,6 +188,384 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _currentRoute = route;
     });
+  }
+
+  Future<void> _performSearch(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _showSearchResults = false;
+        _searchResults = [];
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+      _showSearchResults = true;
+    });
+
+    try {
+      final results = await _repository.searchPatients(query, limit: 10);
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isSearching = false;
+      });
+      print('Error en búsqueda: $e');
+    }
+  }
+
+  Widget _buildSearchResults() {
+    if (!_showSearchResults) return const SizedBox.shrink();
+
+    return Positioned(
+      top: 80, // Debajo de la barra de búsqueda
+      left: 32, // Alineado con el contenido principal
+      right: 32, // Alineado con el contenido principal
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 600, // Ancho máximo similar al campo de búsqueda
+            maxHeight: 280,
+          ),
+          child: GestureDetector(
+            onTap: () {}, // Prevenir que se cierre al tocar el contenido
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 280),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.neutral200),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header con gradiente
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppColors.primary50, AppColors.primary100],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Iconsax.search_normal_1,
+                            color: AppColors.primary600,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Resultados de búsqueda',
+                            style: TextStyle(
+                              color: AppColors.primary700,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_searchResults.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary200,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${_searchResults.length}',
+                                style: TextStyle(
+                                  color: AppColors.primary700,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _showSearchResults = false;
+                                _searchController.clear();
+                                _searchResults = [];
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppColors.neutral200,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.close,
+                                color: AppColors.neutral600,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Contenido con scroll
+                    Flexible(
+                      child: _isSearching
+                          ? const Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          AppColors.primary600),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'Buscando...',
+                                      style: TextStyle(
+                                        color: AppColors.neutral600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : _searchResults.isEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Iconsax.search_normal,
+                                        color: AppColors.neutral400,
+                                        size: 32,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'No se encontraron resultados',
+                                        style: TextStyle(
+                                          color: AppColors.neutral600,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Intenta con otros términos de búsqueda',
+                                        style: TextStyle(
+                                          color: AppColors.neutral500,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.separated(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  shrinkWrap: true,
+                                  itemCount: _searchResults.length > 5
+                                      ? 5
+                                      : _searchResults.length,
+                                  separatorBuilder: (context, index) => Divider(
+                                    height: 0.5,
+                                    color: AppColors.neutral100,
+                                    indent: 12,
+                                    endIndent: 12,
+                                  ),
+                                  itemBuilder: (context, index) {
+                                    final patient = _searchResults[index];
+                                    return _buildSearchResultItem(patient);
+                                  },
+                                ),
+                    ),
+
+                    // Footer con indicador de más resultados
+                    if (_searchResults.length > 5)
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.neutral50,
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Iconsax.arrow_down_2,
+                              color: AppColors.neutral500,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_searchResults.length - 5} resultados más',
+                              style: TextStyle(
+                                color: AppColors.neutral600,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchResultItem(PatientSearchRow patient) {
+    return InkWell(
+      onTap: () {
+        // TODO: Navegar a detalles del paciente
+        print('Seleccionado: ${patient.patientName}');
+        setState(() {
+          _showSearchResults = false;
+          _searchController.clear();
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            // Avatar con especie
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    _getSpeciesColor(patient.species ?? '').withOpacity(0.1),
+                    _getSpeciesColor(patient.species ?? '').withOpacity(0.2),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  patient.patientName.isNotEmpty
+                      ? patient.patientName[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(
+                    color: _getSpeciesColor(patient.species ?? ''),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // Información del paciente
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    patient.patientName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: AppColors.neutral900,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    'Dueño: ${patient.ownerName}',
+                    style: TextStyle(
+                      color: AppColors.neutral600,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (patient.historyNumber?.isNotEmpty == true) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      'Historia: ${patient.historyNumber}',
+                      style: TextStyle(
+                        color: AppColors.neutral500,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Badge de especie
+            if (patient.species?.isNotEmpty == true)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color:
+                      _getSpeciesColor(patient.species ?? '').withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  patient.species ?? '',
+                  style: TextStyle(
+                    color: _getSpeciesColor(patient.species ?? ''),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getSpeciesColor(String species) {
+    switch (species.toLowerCase()) {
+      case 'canino':
+      case 'perro':
+        return const Color(0xFF8B5CF6); // Púrpura
+      case 'felino':
+      case 'gato':
+        return const Color(0xFFF59E0B); // Naranja
+      case 'ave':
+      case 'pájaro':
+        return const Color(0xFF10B981); // Verde
+      case 'roedor':
+        return const Color(0xFFEF4444); // Rojo
+      default:
+        return AppColors.primary600;
+    }
   }
 
   Widget _buildPageContent(String route) {
@@ -450,7 +882,17 @@ class _SideItem extends StatelessWidget {
 /// Topbar
 /// =======================
 class _TopBar extends StatelessWidget {
-  const _TopBar();
+  final TextEditingController searchController;
+  final bool isSearching;
+  final Function(String) onSearch;
+  final Function(String) onSearchChanged;
+
+  const _TopBar({
+    required this.searchController,
+    required this.isSearching,
+    required this.onSearch,
+    required this.onSearchChanged,
+  });
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -493,18 +935,30 @@ class _TopBar extends StatelessWidget {
                 border: Border.all(color: AppColors.neutral200, width: 1),
               ),
               child: TextField(
+                controller: searchController,
+                onChanged: onSearchChanged,
+                onSubmitted: onSearch,
                 decoration: InputDecoration(
                   hintText: 'Buscar pacientes, documentos, tickets, historias…',
                   hintStyle:
                       AppText.bodyM.copyWith(color: AppColors.neutral400),
                   prefixIcon: Icon(Iconsax.search_normal,
                       size: 20, color: AppColors.neutral500),
-                  suffixIcon: IconButton(
-                    onPressed: () {},
-                    icon: Icon(Iconsax.filter,
-                        size: 18, color: AppColors.neutral500),
-                    tooltip: 'Filtros',
-                  ),
+                  suffixIcon: isSearching
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          onPressed: () => onSearch(searchController.text),
+                          icon: Icon(Iconsax.filter,
+                              size: 18, color: AppColors.neutral500),
+                          tooltip: 'Buscar',
+                        ),
                   border: InputBorder.none,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -1557,12 +2011,17 @@ class _Skeleton extends StatelessWidget {
 class AppColors {
   static const primary500 = Color(0xFF5E81F4);
   static const primary600 = Color(0xFF4B6BE0);
+  static const primary700 = Color(0xFF3B5BD6);
+  static const primary200 = Color(0xFFB8C8FF);
+  static const primary100 = Color(0xFFD6E2FF);
+  static const primary50 = Color(0xFFF0F4FF);
   static const neutral900 = Color(0xFF0E1116);
   static const neutral700 = Color(0xFF2C333A);
   static const neutral600 = Color(0xFF475467);
   static const neutral500 = Color(0xFF667085);
   static const neutral400 = Color(0xFF98A2B3);
   static const neutral200 = Color(0xFFE5E7EB);
+  static const neutral100 = Color(0xFFF1F3F4);
   static const neutral50 = Color(0xFFF8FAFC);
   static const success500 = Color(0xFF22C55E);
   static const warning500 = Color(0xFFF59E0B);

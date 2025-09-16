@@ -28,6 +28,12 @@ List<AppMenuItem> _allMenuItems = [
     route: '/home',
   ),
   AppMenuItem(
+    label: 'Buscador',
+    icon: Icons.search_outlined,
+    selectedIcon: Icons.search,
+    route: '/buscador',
+  ),
+  AppMenuItem(
     label: 'Pacientes',
     icon: Icons.pets_outlined,
     selectedIcon: Icons.pets,
