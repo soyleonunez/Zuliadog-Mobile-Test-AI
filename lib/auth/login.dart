@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:zuliadog/features/shell.dart';
-import 'package:zuliadog/features/menu.dart';
+import 'package:zuliadog/features/home.dart';
 
 class LoginView extends StatelessWidget {
   const LoginView({super.key});
@@ -8,10 +7,7 @@ class LoginView extends StatelessWidget {
   void _enterApp(BuildContext context) {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => const AppShell(
-          role: UserRole.doctor,
-          initialRoute: '/dashboard',
-        ),
+        builder: (_) => const HomeScreen(),
       ),
     );
   }

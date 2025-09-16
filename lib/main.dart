@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:zuliadog/core/theme.dart';
 import 'package:zuliadog/features/home.dart';
-// <- NUEVO
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +15,7 @@ class ZuliadogApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      home: const HomePage(), // <- SIEMPRE abre Home + menú
+      home: const HomeScreen(),
     );
   }
 }

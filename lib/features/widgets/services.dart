@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:zuliadog/core/theme.dart'; // SectionCard, SectionHeader
+import 'package:zuliadog/core/theme.dart';
 
 class ServicesCard extends StatelessWidget {
   const ServicesCard({super.key});
@@ -20,9 +20,32 @@ class ServicesCard extends StatelessWidget {
     return SectionCard(
       child: Column(
         children: [
-          const SectionHeader(
-            title: 'Distribución de servicios',
-            subtitle: 'Últimos 30 días',
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Distribución de servicios',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.neutral900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Últimos 30 días',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.neutral500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           AspectRatio(
             aspectRatio: 16 / 9,
@@ -39,7 +62,7 @@ class ServicesCard extends StatelessWidget {
                         for (final s in data)
                           PieChartSectionData(
                             value: s.value.toDouble(),
-                            color: s.color.withValues(alpha: .85),
+                            color: s.color.withOpacity(0.85),
                             title:
                                 '${((s.value / total) * 100).toStringAsFixed(0)}%',
                             titleStyle: Theme.of(context)

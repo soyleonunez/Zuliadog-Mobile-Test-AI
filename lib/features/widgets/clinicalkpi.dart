@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:zuliadog/core/theme.dart'; // SectionCard, SectionHeader
+import 'package:zuliadog/core/theme.dart';
 
 class ClinicalKpiCard extends StatelessWidget {
   const ClinicalKpiCard({super.key});
@@ -15,9 +15,32 @@ class ClinicalKpiCard extends StatelessWidget {
     return SectionCard(
       child: Column(
         children: [
-          const SectionHeader(
-            title: 'Indicadores clínicos',
-            subtitle: 'Tiempo promedio por consulta (7 días)',
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Indicadores clínicos',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.neutral900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tiempo promedio por consulta (7 días)',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.neutral500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           SizedBox(
             height: 220,
@@ -101,8 +124,8 @@ class ClinicalKpiCard extends StatelessWidget {
                       show: true,
                       gradient: LinearGradient(
                         colors: [
-                          scheme.primary.withValues(alpha: .25),
-                          scheme.primary.withValues(alpha: .02),
+                          scheme.primary.withOpacity(0.25),
+                          scheme.primary.withOpacity(0.02),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,

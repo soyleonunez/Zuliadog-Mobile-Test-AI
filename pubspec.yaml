@@ -41,7 +41,7 @@ dependencies:
   flutter_typeahead: ^5.2.0
   dotted_border: ^3.1.0
   path_drawing: ^1.0.1
-  fl_chart: ^1.1.0
+  fl_chart: ^0.69.0
   reorderable_grid_view: ^2.2.8
 
   # --- UI Avanzada / Layout ---
