@@ -198,8 +198,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return 'Recetas';
       case 'frame_agenda':
         return 'Agenda & Calendario';
-      case 'frame_documentos':
-        return 'Documentos';
+      case 'frame_visor_medico':
+        return 'Visor médico';
       case 'frame_recursos':
         return 'Recursos';
       case 'frame_tickets':
@@ -223,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return Iconsax.note_text;
       case 'frame_agenda':
         return Iconsax.calendar_1;
-      case 'frame_documentos':
+      case 'frame_visor_medico':
         return Iconsax.document_text;
       case 'frame_recursos':
         return Iconsax.book_1;
@@ -255,7 +255,7 @@ class _SideNav extends StatelessWidget {
       _NavItem('Historias médicas', Iconsax.health, 'frame_historias'),
       _NavItem('Recetas', Iconsax.note_text, 'frame_recetas'),
       _NavItem('Agenda & Calendario', Iconsax.calendar_1, 'frame_agenda'),
-      _NavItem('Documentos', Iconsax.document_text, 'frame_documentos'),
+      _NavItem('Visor médico', Iconsax.document_text, 'frame_visor_medico'),
       _NavItem('Recursos', Iconsax.book_1, 'frame_recursos'),
       _NavItem('Tickets', Iconsax.receipt_2, 'frame_tickets'),
       _NavItem('Reportes', Iconsax.chart_2, 'frame_reportes'),
@@ -494,7 +494,7 @@ class _TopBar extends StatelessWidget {
               ),
               child: TextField(
                 decoration: InputDecoration(
-                  hintText: 'Buscar pacientes, documentos, tickets…',
+                  hintText: 'Buscar pacientes, documentos, tickets, historias…',
                   hintStyle:
                       AppText.bodyM.copyWith(color: AppColors.neutral400),
                   prefixIcon: Icon(Iconsax.search_normal,
