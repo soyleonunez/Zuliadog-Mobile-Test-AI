@@ -346,7 +346,7 @@ class _SideNav extends StatelessWidget {
               children: [
                 const CircleAvatar(
                   radius: 16,
-                  backgroundImage: AssetImage('Assets/Images/App.png'),
+                  backgroundImage: AssetImage('Assets/Images/ProfileImage.png'),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -545,7 +545,7 @@ class _TopBar extends StatelessWidget {
                 ),
                 child: const CircleAvatar(
                   radius: 16,
-                  backgroundImage: AssetImage('Assets/Images/App.png'),
+                  backgroundImage: AssetImage('Assets/Images/ProfileImage.png'),
                 ),
               ),
             ),
@@ -988,26 +988,54 @@ class _RangeSelector extends StatelessWidget {
   const _RangeSelector({required this.range, required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<RangeWeeks>(
-      segments: const [
-        ButtonSegment(
-            value: RangeWeeks.w4,
-            label: Text('Semana'),
-            icon: Icon(Iconsax.calendar_1, size: 16)),
-        ButtonSegment(
-            value: RangeWeeks.w12,
-            label: Text('Mes'),
-            icon: Icon(Iconsax.calendar_2, size: 16)),
-      ],
-      selected: {range},
-      showSelectedIcon: false,
-      onSelectionChanged: (s) => onChanged(s.first),
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        side: const WidgetStatePropertyAll(
-            BorderSide(color: AppColors.neutral200)),
-        shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+    return Container(
+      constraints:
+          const BoxConstraints(minWidth: 250), // Ampliar espacio horizontal
+      child: SegmentedButton<RangeWeeks>(
+        segments: const [
+          ButtonSegment(
+              value: RangeWeeks.w4,
+              label: Text('Semana'),
+              icon: Icon(Iconsax.calendar_1, size: 16)),
+          ButtonSegment(
+              value: RangeWeeks.w12,
+              label: Text('Mes'),
+              icon: Icon(Iconsax.calendar_2, size: 16)),
+        ],
+        selected: {range},
+        showSelectedIcon: false,
+        onSelectionChanged: (s) => onChanged(s.first),
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+            (Set<WidgetState> states) {
+              if (states.contains(WidgetState.selected)) {
+                return AppColors.primary500
+                    .withOpacity(0.12); // Fondo sutil solo para seleccionado
+              }
+              return Colors.transparent; // Sin fondo para no seleccionado
+            },
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+            (Set<WidgetState> states) {
+              if (states.contains(WidgetState.selected)) {
+                return AppColors.primary600;
+              }
+              return AppColors.neutral600;
+            },
+          ),
+          side: WidgetStateProperty.resolveWith<BorderSide?>(
+            (Set<WidgetState> states) {
+              if (states.contains(WidgetState.selected)) {
+                return BorderSide(
+                    color: AppColors.primary500.withOpacity(0.3), width: 1);
+              }
+              return BorderSide(color: AppColors.neutral200, width: 1);
+            },
+          ),
+          shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+        ),
       ),
     );
   }
@@ -1218,16 +1246,46 @@ class _MiniCalendarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final first = DateTime(month.year, month.month, 1);
-    final startWeekday = (first.weekday % 7);
-    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    final cells = <DateTime?>[];
-    for (int i = 0; i < startWeekday; i++) cells.add(null);
-    for (int d = 1; d <= daysInMonth; d++)
-      cells.add(DateTime(month.year, month.month, d));
-    while (cells.length % 7 != 0) cells.add(null);
-
     final today = DateTime.now();
+    final first = DateTime(month.year, month.month, 1);
+    final last = DateTime(month.year, month.month + 1, 0);
+
+    // En español, Lunes = 1, Domingo = 7
+    final startWeekday = first.weekday; // 1=Lunes, 7=Domingo
+    final daysInMonth = last.day;
+
+    // Crear la lista de celdas del calendario (6 semanas = 42 días)
+    final cells = <DateTime?>[];
+
+    // Calcular cuántos días del mes anterior necesitamos para completar la primera semana
+    // Si el primer día del mes es Lunes (1), necesitamos 0 días del mes anterior
+    // Si es Martes (2), necesitamos 1 día del mes anterior, etc.
+    final daysFromPrevMonth = startWeekday - 1;
+
+    if (daysFromPrevMonth > 0) {
+      final prevMonth = DateTime(month.year, month.month - 1);
+      final daysInPrevMonth = DateTime(month.year, month.month, 0).day;
+      final startDay = daysInPrevMonth - daysFromPrevMonth + 1;
+
+      for (int i = startDay; i <= daysInPrevMonth; i++) {
+        cells.add(DateTime(prevMonth.year, prevMonth.month, i));
+      }
+    }
+
+    // Agregar todos los días del mes actual
+    for (int d = 1; d <= daysInMonth; d++) {
+      cells.add(DateTime(month.year, month.month, d));
+    }
+
+    // Agregar días del mes siguiente para completar 6 semanas (42 días)
+    final nextMonth = DateTime(month.year, month.month + 1);
+    final remainingCells = 42 - cells.length;
+    for (int d = 1; d <= remainingCells; d++) {
+      cells.add(DateTime(nextMonth.year, nextMonth.month, d));
+    }
+
+    // Siempre usar español para los días de la semana
+    final weekdayNames = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
     return Card(
       elevation: 0,
@@ -1253,7 +1311,7 @@ class _MiniCalendarCard extends StatelessWidget {
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+              children: weekdayNames
                   .map((d) => Expanded(
                       child: Center(
                           child: Text(d,
@@ -1267,15 +1325,26 @@ class _MiniCalendarCard extends StatelessWidget {
             const SizedBox(height: 4),
             // Grid 6x7 compacto, ring en "hoy", sin fondo visible
             Column(
-              children: List.generate((cells.length / 7).ceil(), (row) {
+              children: List.generate(6, (row) {
+                // 6 semanas fijas
                 return Row(
                   children: List.generate(7, (col) {
                     final idx = row * 7 + col;
                     final date = cells[idx];
+                    // Verificar si es el día de hoy
                     final isToday = date != null &&
                         date.year == today.year &&
                         date.month == today.month &&
                         date.day == today.day;
+
+                    // Verificar si es del mes actual
+                    final isCurrentMonth = date != null &&
+                        date.month == month.month &&
+                        date.year == month.year;
+
+                    // Verificar si es fin de semana (sábado o domingo)
+                    final isWeekend = date != null &&
+                        (date.weekday == 6 || date.weekday == 7);
 
                     return Expanded(
                       child: AspectRatio(
@@ -1284,28 +1353,37 @@ class _MiniCalendarCard extends StatelessWidget {
                           cursor: date != null
                               ? SystemMouseCursors.click
                               : SystemMouseCursors.basic,
-                          child: Container(
-                            margin: const EdgeInsets.all(2.5),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isToday
-                                    ? AppColors.primary500
-                                    : Colors.transparent,
-                                width: isToday ? 1.2 : 1,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                date?.day.toString() ?? '',
-                                style: TextStyle(
-                                  fontSize: 12,
+                          child: GestureDetector(
+                            onTap: date != null ? () => _onDateTap(date) : null,
+                            child: Container(
+                              margin: const EdgeInsets.all(2.5),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
                                   color: isToday
-                                      ? AppColors.primary600
-                                      : AppColors.neutral700,
-                                  fontWeight: isToday
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
+                                      ? AppColors.primary500
+                                      : Colors.transparent,
+                                  width: isToday ? 1.2 : 1,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  date?.day.toString() ?? '',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isToday
+                                        ? AppColors.primary600
+                                        : isCurrentMonth
+                                            ? (isWeekend
+                                                ? AppColors
+                                                    .neutral500 // Fin de semana más tenue
+                                                : AppColors.neutral700)
+                                            : AppColors
+                                                .neutral400, // Días de otros meses más tenues
+                                    fontWeight: isToday
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1339,6 +1417,18 @@ class _MiniCalendarCard extends StatelessWidget {
       'Diciembre'
     ];
     return '${meses[m.month - 1]} ${m.year}';
+  }
+
+  // Función para manejar el tap en una fecha (preparado para futuros eventos)
+  void _onDateTap(DateTime date) {
+    // Aquí se implementará la lógica para mostrar eventos del día
+    // Por ahora solo imprimimos la fecha seleccionada
+    print('Fecha seleccionada: ${date.day}/${date.month}/${date.year}');
+
+    // TODO: Implementar funcionalidad de eventos
+    // - Mostrar eventos del día seleccionado
+    // - Permitir crear nuevos eventos
+    // - Mostrar modal con detalles del día
   }
 }
 
