@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
+  pdfx
   printing
   screen_retriever_windows
   syncfusion_pdfviewer_windows

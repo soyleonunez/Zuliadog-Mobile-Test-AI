@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:iconsax/iconsax.dart';
 
 enum UserRole { doctor, admin }
 
 class AppMenuItem {
   final String label;
   final IconData icon;
-  final IconData? selectedIcon;
   final String route;
   final Set<UserRole> visibleFor;
   final int Function()? badgeBuilder;
@@ -13,81 +13,101 @@ class AppMenuItem {
   const AppMenuItem({
     required this.label,
     required this.icon,
-    this.selectedIcon,
     required this.route,
     this.visibleFor = const {UserRole.doctor, UserRole.admin},
     this.badgeBuilder,
   });
 }
 
+// ==== COLORS ====
+class AppColors {
+  static const primary500 = Color(0xFF5E81F4);
+  static const primary600 = Color(0xFF4B6BE0);
+  static const primary700 = Color(0xFF3B5BD6);
+  static const primary200 = Color(0xFFB8C8FF);
+  static const primary100 = Color(0xFFD6E2FF);
+  static const primary50 = Color(0xFFF0F4FF);
+  static const neutral900 = Color(0xFF0E1116);
+  static const neutral700 = Color(0xFF2C333A);
+  static const neutral600 = Color(0xFF475467);
+  static const neutral500 = Color(0xFF667085);
+  static const neutral400 = Color(0xFF98A2B3);
+  static const neutral200 = Color(0xFFE5E7EB);
+  static const neutral100 = Color(0xFFF1F3F4);
+  static const neutral50 = Color(0xFFF8FAFC);
+  static const success500 = Color(0xFF22C55E);
+  static const warning500 = Color(0xFFF59E0B);
+  static const danger500 = Color(0xFFEF4444);
+}
+
+// ==== TEXT STYLES ====
+class AppText {
+  static const titleL = TextStyle(
+      fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.neutral900);
+  static const titleM = TextStyle(
+      fontSize: 22, fontWeight: FontWeight.w600, color: AppColors.neutral900);
+  static const titleS = TextStyle(
+      fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.neutral900);
+  static const bodyM = TextStyle(
+      fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.neutral900);
+  static const bodyS = TextStyle(
+      fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.neutral900);
+  static const label = TextStyle(
+      fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.neutral900);
+}
+
 List<AppMenuItem> _allMenuItems = [
   AppMenuItem(
     label: 'Home',
-    icon: Icons.dashboard_outlined,
-    selectedIcon: Icons.dashboard,
-    route: '/home',
-  ),
-  AppMenuItem(
-    label: 'Buscador',
-    icon: Icons.search_outlined,
-    selectedIcon: Icons.search,
-    route: '/buscador',
+    icon: Iconsax.home_2,
+    route: 'frame_home',
   ),
   AppMenuItem(
     label: 'Pacientes',
-    icon: Icons.pets_outlined,
-    selectedIcon: Icons.pets,
-    route: '/pacientes',
+    icon: Iconsax.pet,
+    route: 'frame_pacientes',
   ),
   AppMenuItem(
     label: 'Historias médicas',
-    icon: Icons.medical_services_outlined,
-    selectedIcon: Icons.medical_services,
-    route: '/historias',
+    icon: Iconsax.health,
+    route: 'frame_historias',
   ),
   AppMenuItem(
     label: 'Recetas',
-    icon: Icons.medication_outlined,
-    selectedIcon: Icons.medication,
-    route: '/recetas',
+    icon: Iconsax.note_text,
+    route: 'frame_recetas',
+  ),
+  AppMenuItem(
+    label: 'Laboratorio',
+    icon: Iconsax.bill,
+    route: 'frame_laboratorio',
   ),
   AppMenuItem(
     label: 'Agenda & Calendario',
-    icon: Icons.event_note_outlined,
-    selectedIcon: Icons.event_note,
-    route: '/agenda',
+    icon: Iconsax.calendar_1,
+    route: 'frame_agenda',
   ),
   AppMenuItem(
-    label: 'Documentos',
-    icon: Icons.description_outlined,
-    selectedIcon: Icons.description,
-    route: '/documentos',
+    label: 'Visor médico',
+    icon: Iconsax.document_text,
+    route: 'frame_visor_medico',
     badgeBuilder: () => 3,
   ),
   AppMenuItem(
     label: 'Recursos',
-    icon: Icons.menu_book_outlined,
-    selectedIcon: Icons.menu_book,
-    route: '/recursos',
+    icon: Iconsax.book_1,
+    route: 'frame_recursos',
   ),
   AppMenuItem(
     label: 'Tickets',
-    icon: Icons.receipt_long_outlined,
-    selectedIcon: Icons.receipt_long,
-    route: '/tickets',
+    icon: Iconsax.receipt_2,
+    route: 'frame_tickets',
   ),
   AppMenuItem(
     label: 'Reportes',
-    icon: Icons.query_stats_outlined,
-    selectedIcon: Icons.query_stats,
-    route: '/reportes',
+    icon: Iconsax.chart_2,
+    route: 'frame_reportes',
     visibleFor: {UserRole.admin},
-  ),
-  AppMenuItem(
-    label: 'Ajustes',
-    icon: Icons.settings_outlined,
-    selectedIcon: Icons.settings,
-    route: '/ajustes',
   ),
 ];
 
@@ -97,4 +117,228 @@ List<AppMenuItem> visibleMenu(UserRole role) =>
 int indexForRoute(List<AppMenuItem> items, String route, {int fallback = 0}) {
   final i = items.indexWhere((m) => m.route == route);
   return i >= 0 ? i : fallback;
+}
+
+// ==== WIDGET DE MENÚ REUTILIZABLE ====
+class AppSidebar extends StatelessWidget {
+  final String activeRoute;
+  final void Function(String route) onTap;
+  final UserRole userRole;
+
+  const AppSidebar({
+    super.key,
+    required this.activeRoute,
+    required this.onTap,
+    this.userRole = UserRole.doctor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = visibleMenu(userRole);
+
+    return Container(
+      width: 260,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: AppColors.neutral200, width: 1),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Header con logo
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary500, AppColors.primary600],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child:
+                      const Icon(Iconsax.heart, size: 20, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Zuliadog', style: AppText.titleS),
+                      Text('Veterinaria',
+                          style: AppText.bodyS
+                              .copyWith(color: AppColors.neutral500)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Menú principal
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              itemBuilder: (_, i) {
+                final item = items[i];
+                final active = item.route == activeRoute;
+                return _SidebarItem(
+                  label: item.label,
+                  icon: item.icon,
+                  active: active,
+                  badge: item.badgeBuilder?.call(),
+                  onTap: () => onTap(item.route),
+                );
+              },
+              separatorBuilder: (_, __) => const SizedBox(height: 4),
+              itemCount: items.length,
+            ),
+          ),
+
+          // Divider y ajustes
+          const Divider(height: 1, color: AppColors.neutral200),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: _SidebarItem(
+              label: 'Ajustes',
+              icon: Iconsax.setting_2,
+              active: activeRoute == 'frame_ajustes',
+              onTap: () => onTap('frame_ajustes'),
+            ),
+          ),
+
+          // Usuario en la parte inferior
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.neutral50,
+              border: const Border(
+                top: BorderSide(color: AppColors.neutral200, width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                const CircleAvatar(
+                  radius: 16,
+                  backgroundImage: AssetImage('Assets/Images/ProfileImage.png'),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Doctor/a', style: AppText.bodyM),
+                      Text('doctor@zuliadog.com',
+                          style: AppText.bodyS
+                              .copyWith(color: AppColors.neutral500)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Iconsax.more_2, size: 18),
+                  tooltip: 'Menú de usuario',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final int? badge;
+  final VoidCallback onTap;
+
+  const _SidebarItem({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: active
+                ? AppColors.primary500.withOpacity(.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: active
+                ? Border.all(
+                    color: AppColors.primary500.withOpacity(.2), width: 1)
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: active ? AppColors.primary600 : AppColors.neutral600,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppText.bodyM.copyWith(
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    color: active ? AppColors.neutral900 : AppColors.neutral700,
+                  ),
+                ),
+              ),
+              if (badge != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: const BoxDecoration(
+                    color: AppColors.danger500,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints:
+                      const BoxConstraints(minWidth: 16, minHeight: 16),
+                  child: Text(
+                    badge.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              if (active)
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary600,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

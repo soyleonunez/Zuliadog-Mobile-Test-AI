@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:zuliadog/core/navigation.dart';
 import 'package:zuliadog/features/data/buscador.dart';
 import 'package:zuliadog/features/data/repository.dart';
+import 'package:zuliadog/features/menu.dart';
+import 'package:zuliadog/features/utilities/visor.dart';
+import 'package:zuliadog/features/utilities/pacientes.dart';
+import 'package:zuliadog/features/utilities/historias.dart';
+import 'package:zuliadog/features/utilities/recetas.dart';
+import 'package:zuliadog/features/utilities/laboratorio.dart';
+import 'package:zuliadog/features/utilities/agenda.dart';
+import 'package:zuliadog/features/utilities/recursos.dart';
+import 'package:zuliadog/features/utilities/tickets.dart';
+import 'package:zuliadog/features/utilities/reportes.dart';
 
 /// =======================
 /// Zuliadog — Home (Desktop) v2.2 (one-file)
@@ -26,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool useRealChart =
       false; // reemplaza placeholder cuando integres tu librería de charts
   RangeWeeks _range = RangeWeeks.w4;
-  String _currentRoute = 'frame_home';
+  final String _currentRoute = 'frame_home';
 
   // Variables para el buscador integrado
   final TextEditingController _searchController = TextEditingController();
@@ -73,10 +84,11 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                    width: 260,
-                    child: _SideNav(
-                        activeRoute: _currentRoute, onTap: _handleNavTap)),
+                AppSidebar(
+                  activeRoute: _currentRoute,
+                  onTap: _handleNavTap,
+                  userRole: UserRole.doctor,
+                ),
                 Expanded(
                   child: Column(
                     children: [
@@ -104,54 +116,48 @@ class _HomeScreenState extends State<HomeScreen> {
                                 horizontal: 32, vertical: 24),
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 1600),
-                              child: _currentRoute == 'frame_home'
-                                  ? Row(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // MAIN
+                                  Expanded(
+                                    flex: 3,
+                                    child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        // MAIN
-                                        Expanded(
-                                          flex: 3,
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              _WelcomeHeader(
-                                                doctorName: 'Doctor/a',
-                                                onSync: () {
-                                                  // Aquí irá la lógica para sincronizar con Supabase
-                                                  print(
-                                                      'Sincronizando datos con Supabase...');
-                                                },
-                                              ),
-                                              const SizedBox(height: 16),
-                                              _QuickActionsSection(),
-                                              const SizedBox(height: 16),
-                                              _ImportantSection(
-                                                  loading: loading),
-                                              const SizedBox(height: 16),
-                                              _WeeklyPerformanceCard(
-                                                loading: loading,
-                                                range: _range,
-                                                onRangeChanged: (r) =>
-                                                    setState(() => _range = r),
-                                                useRealChart: useRealChart,
-                                              ),
-                                              const SizedBox(height: 16),
-                                              _RecentActivityTable(
-                                                  loading: loading),
-                                              const SizedBox(height: 40),
-                                            ],
-                                          ),
+                                        _WelcomeHeader(
+                                          doctorName: 'Doctor/a',
+                                          onSync: () {
+                                            // Aquí irá la lógica para sincronizar con Supabase
+                                            print(
+                                                'Sincronizando datos con Supabase...');
+                                          },
                                         ),
-                                        const SizedBox(width: 16),
-                                        // RIGHT COLUMN
-                                        const SizedBox(
-                                            width: 320,
-                                            child: _RightColumnContent()),
+                                        const SizedBox(height: 16),
+                                        _QuickActionsSection(),
+                                        const SizedBox(height: 16),
+                                        _ImportantSection(loading: loading),
+                                        const SizedBox(height: 16),
+                                        _WeeklyPerformanceCard(
+                                          loading: loading,
+                                          range: _range,
+                                          onRangeChanged: (r) =>
+                                              setState(() => _range = r),
+                                          useRealChart: useRealChart,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        _RecentActivityTable(loading: loading),
+                                        const SizedBox(height: 40),
                                       ],
-                                    )
-                                  : _buildPageContent(_currentRoute),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  // RIGHT COLUMN
+                                  const SizedBox(
+                                      width: 320, child: _RightColumnContent()),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -185,9 +191,44 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleNavTap(String route) {
-    setState(() {
-      _currentRoute = route;
-    });
+    if (route == 'frame_home') {
+      // Ya estamos en home
+      return;
+    }
+
+    // Navegar a la página correspondiente
+    String routePath = '/home'; // fallback
+    switch (route) {
+      case 'frame_pacientes':
+        routePath = PacientesPage.route;
+        break;
+      case 'frame_historias':
+        routePath = HistoriasPage.route;
+        break;
+      case 'frame_recetas':
+        routePath = RecetasPage.route;
+        break;
+      case 'frame_laboratorio':
+        routePath = LaboratorioPage.route;
+        break;
+      case 'frame_agenda':
+        routePath = AgendaPage.route;
+        break;
+      case 'frame_visor_medico':
+        routePath = VisorMedicoPage.route;
+        break;
+      case 'frame_recursos':
+        routePath = RecursosPage.route;
+        break;
+      case 'frame_tickets':
+        routePath = TicketsPage.route;
+        break;
+      case 'frame_reportes':
+        routePath = ReportesPage.route;
+        break;
+    }
+
+    NavigationHelper.navigateToRoute(context, routePath);
   }
 
   Future<void> _performSearch(String query) async {
@@ -566,320 +607,6 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return AppColors.primary600;
     }
-  }
-
-  Widget _buildPageContent(String route) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _getPageTitle(route),
-              style: AppText.titleL,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Contenido de ${_getPageTitle(route).toLowerCase()} - En desarrollo',
-              style: AppText.bodyM.copyWith(color: AppColors.neutral500),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                color: AppColors.neutral50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.neutral200),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _getPageIcon(route),
-                      size: 48,
-                      color: AppColors.neutral500,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Próximamente disponible',
-                      style:
-                          AppText.bodyM.copyWith(color: AppColors.neutral500),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _getPageTitle(String route) {
-    switch (route) {
-      case 'frame_pacientes':
-        return 'Pacientes';
-      case 'frame_historias':
-        return 'Historias Médicas';
-      case 'frame_recetas':
-        return 'Recetas';
-      case 'frame_laboratorio':
-        return 'Laboratorio';
-      case 'frame_agenda':
-        return 'Agenda & Calendario';
-      case 'frame_visor_medico':
-        return 'Visor médico';
-      case 'frame_recursos':
-        return 'Recursos';
-      case 'frame_tickets':
-        return 'Tickets';
-      case 'frame_reportes':
-        return 'Reportes';
-      case 'frame_ajustes':
-        return 'Ajustes';
-      default:
-        return 'Home';
-    }
-  }
-
-  IconData _getPageIcon(String route) {
-    switch (route) {
-      case 'frame_pacientes':
-        return Iconsax.pet;
-      case 'frame_historias':
-        return Iconsax.health;
-      case 'frame_recetas':
-        return Iconsax.note_text;
-      case 'frame_laboratorio':
-        return Iconsax.bill;
-      case 'frame_agenda':
-        return Iconsax.calendar_1;
-      case 'frame_visor_medico':
-        return Iconsax.document_text;
-      case 'frame_recursos':
-        return Iconsax.book_1;
-      case 'frame_tickets':
-        return Iconsax.receipt_2;
-      case 'frame_reportes':
-        return Iconsax.chart_2;
-      case 'frame_ajustes':
-        return Iconsax.setting_2;
-      default:
-        return Iconsax.home_2;
-    }
-  }
-}
-
-/// =======================
-/// Sidebar
-/// =======================
-class _SideNav extends StatelessWidget {
-  final String activeRoute;
-  final void Function(String route) onTap;
-  const _SideNav({required this.activeRoute, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = <_NavItem>[
-      _NavItem('Home', Iconsax.home_2, 'frame_home'),
-      _NavItem('Pacientes', Iconsax.pet, 'frame_pacientes'),
-      _NavItem('Historias médicas', Iconsax.health, 'frame_historias'),
-      _NavItem('Recetas', Iconsax.note_text, 'frame_recetas'),
-      _NavItem('Laboratorio', Iconsax.bill, 'frame_laboratorio'),
-      _NavItem('Agenda & Calendario', Iconsax.calendar_1, 'frame_agenda'),
-      _NavItem('Visor médico', Iconsax.document_text, 'frame_visor_medico'),
-      _NavItem('Recursos', Iconsax.book_1, 'frame_recursos'),
-      _NavItem('Tickets', Iconsax.receipt_2, 'frame_tickets'),
-      _NavItem('Reportes', Iconsax.chart_2, 'frame_reportes'),
-    ];
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          right: BorderSide(color: AppColors.neutral200, width: 1),
-        ),
-      ),
-      child: Column(
-        children: [
-          // Header con logo
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary500, AppColors.primary600],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child:
-                      const Icon(Iconsax.heart, size: 20, color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Zuliadog', style: AppText.titleS),
-                      Text('Veterinaria',
-                          style: AppText.bodyS
-                              .copyWith(color: AppColors.neutral500)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Menú principal
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              itemBuilder: (_, i) {
-                final it = items[i];
-                final active = it.route == activeRoute;
-                return _SideItem(
-                    label: it.label,
-                    icon: it.icon,
-                    active: active,
-                    onTap: () => onTap(it.route));
-              },
-              separatorBuilder: (_, __) => const SizedBox(height: 4),
-              itemCount: items.length,
-            ),
-          ),
-
-          // Divider y ajustes
-          const Divider(height: 1, color: AppColors.neutral200),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: _SideItem(
-                label: 'Ajustes',
-                icon: Iconsax.setting_2,
-                active: activeRoute == 'frame_ajustes',
-                onTap: () => onTap('frame_ajustes')),
-          ),
-
-          // Usuario en la parte inferior
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.neutral50,
-              border: const Border(
-                top: BorderSide(color: AppColors.neutral200, width: 1),
-              ),
-            ),
-            child: Row(
-              children: [
-                const CircleAvatar(
-                  radius: 16,
-                  backgroundImage: AssetImage('Assets/Images/ProfileImage.png'),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Doctor/a', style: AppText.bodyM),
-                      Text('doctor@zuliadog.com',
-                          style: AppText.bodyS
-                              .copyWith(color: AppColors.neutral500)),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Iconsax.more_2, size: 18),
-                  tooltip: 'Menú de usuario',
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavItem {
-  final String label;
-  final IconData icon;
-  final String route;
-  _NavItem(this.label, this.icon, this.route);
-}
-
-class _SideItem extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool active;
-  final VoidCallback onTap;
-  const _SideItem(
-      {required this.label,
-      required this.icon,
-      required this.active,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: active
-                ? AppColors.primary500.withOpacity(.12)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: active
-                ? Border.all(
-                    color: AppColors.primary500.withOpacity(.2), width: 1)
-                : null,
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: active ? AppColors.primary600 : AppColors.neutral600,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppText.bodyM.copyWith(
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                    color: active ? AppColors.neutral900 : AppColors.neutral700,
-                  ),
-                ),
-              ),
-              if (active)
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary600,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
