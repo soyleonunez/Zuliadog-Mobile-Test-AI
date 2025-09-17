@@ -1,66 +1,185 @@
+// lib/visor.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pdfx/pdfx.dart';
-import 'package:iconsax/iconsax.dart';
+import 'package:dio/dio.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
-import '../../core/doc_theme.dart';
 import '../../core/navigation.dart';
+import '../../features/data/storage_helper.dart';
+import '../../features/data/file_service.dart';
+import '../../features/widgets/file_viewer_dialog.dart';
 import '../menu.dart';
 
-class DocumentItem {
-  final String id;
-  final String name; // p.ej. "Consentimiento Cirugía - Luna.pdf"
-  final String? paciente; // "Luna (Gato)"
-  final DateTime createdAt; // fecha
-  final int sizeBytes; // tamaño
-  final String? localPath; // ruta local si ya está descargado
-  final String? previewUrl; // opcional: miniatura o dataURL
+// ======= Utils de tipo de documento =======
+enum DocKind { pdf, image, table, word, other }
 
-  const DocumentItem({
-    required this.id,
-    required this.name,
-    required this.createdAt,
-    required this.sizeBytes,
-    this.paciente,
-    this.localPath,
-    this.previewUrl,
-  });
+DocKind kindFromName(String name) {
+  final parts = name.split('.');
+  final ext = parts.length > 1 ? parts.last.toLowerCase() : '';
+  if (ext == 'pdf') return DocKind.pdf;
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif'].contains(ext)) return DocKind.image;
+  if (['csv', 'xls', 'xlsx'].contains(ext)) return DocKind.table;
+  if (['doc', 'docx', 'rtf'].contains(ext)) return DocKind.word;
+  return DocKind.other;
 }
 
-class VisorMedicoPage extends StatefulWidget {
-  const VisorMedicoPage({super.key});
+IconData iconForKind(DocKind k) {
+  switch (k) {
+    case DocKind.pdf:
+      return Icons.picture_as_pdf;
+    case DocKind.image:
+      return Icons.image;
+    case DocKind.table:
+      return Icons.grid_on;
+    case DocKind.word:
+      return Icons.description;
+    case DocKind.other:
+      return Icons.insert_drive_file;
+  }
+}
 
-  static const route = '/visor-medico';
+Color colorForKind(DocKind k) {
+  switch (k) {
+    case DocKind.pdf:
+      return AppTheme.danger500; // rojo
+    case DocKind.word:
+      return const Color(0xFF3B82F6); // azul
+    case DocKind.table:
+      return AppTheme.success500; // verde
+    case DocKind.image:
+      return AppTheme.warning500; // amarillo
+    case DocKind.other:
+      return AppTheme.neutral500; // gris
+  }
+}
+
+// ======= Modelo de ítem en UI =======
+// Ya no se usa, reemplazado por DocItem del storage_helper
+
+// ======= Variables de estado =======
+List<DocItem> _docs = [];
+int? _selectedIndex;
+PdfControllerPinch? _pdfController;
+bool _isLoading = false;
+String? _errorMessage;
+
+// ======= Pantalla principal del visor =======
+class VisorPage extends StatefulWidget {
+  const VisorPage({super.key});
 
   @override
-  State<VisorMedicoPage> createState() => _VisorMedicoPageState();
+  State<VisorPage> createState() => _VisorPageState();
 }
 
-class _VisorMedicoPageState extends State<VisorMedicoPage> {
-  // Supabase client
-  final SupabaseClient _db = Supabase.instance.client;
-
-  // Documentos desde Supabase
-  List<DocumentItem> _docs = [];
-  bool _loading = true;
-
-  String _tableQuery = '';
-  int? _selectedIndex;
-  bool _gridView = false;
-  bool _isFullscreen = false;
-
-  // PDF state
-  PdfControllerPinch? _pdfController;
-  int _pdfPageCount = 0;
-  int _pdfPage = 1;
-
+class _VisorPageState extends State<VisorPage> {
+  // Carga inicial: indexar inbox y cargar lista
   @override
   void initState() {
     super.initState();
-    _loadDocuments();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    try {
+      await _fetchDocs();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error inicializando: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchDocs() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Usar el método de emergencia para evitar storage.search
+      final list = await listDocsEmergency();
+
+      setState(() {
+        _docs = list;
+        _selectedIndex = _docs.isEmpty ? null : 0;
+        _isLoading = false;
+      });
+      if (_selectedIndex != null) {
+        await _loadPreviewFor(_docs[_selectedIndex!]);
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error al cargar documentos: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadPreviewFor(DocItem d) async {
+    // limpia PDF previo
+    _pdfController?.dispose();
+    _pdfController = null;
+
+    // descarga a cache usando la URL pública
+    final local = await _downloadToCache(d.url, d.name);
+    final idx = _docs.indexOf(d);
+    if (idx != -1) {
+      // Crear nuevo DocItem con localPath
+      final updatedDoc = DocItem(
+        name: d.name,
+        path: d.path,
+        url: d.url,
+        updatedAt: d.updatedAt,
+      );
+      _docs[idx] = updatedDoc;
+    }
+
+    // si es PDF, crea controlador
+    final ext = d.name.split('.').last.toLowerCase();
+    if (ext == 'pdf') {
+      _pdfController =
+          PdfControllerPinch(document: PdfDocument.openFile(local));
+    }
+    setState(() {});
+  }
+
+  Future<String> _downloadToCache(String url, String filename) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final localPath = p.join(tempDir.path, filename);
+
+      final dio = Dio();
+
+      // Configurar opciones para manejar errores 400
+      await dio.download(
+        url,
+        localPath,
+        options: Options(
+          validateStatus: (status) => status! < 500, // Aceptar códigos < 500
+          followRedirects: true,
+          maxRedirects: 5,
+        ),
+      );
+
+      return localPath;
+    } catch (e) {
+      // Crear un archivo temporal vacío para evitar crashes
+      final tempDir = await getTemporaryDirectory();
+      final localPath = p.join(tempDir.path, 'error_$filename');
+      await File(localPath).writeAsString('Error al descargar: $e');
+
+      return localPath;
+    }
+  }
+
+  Future<void> _refresh() async {
+    await _fetchDocs();
   }
 
   @override
@@ -69,275 +188,143 @@ class _VisorMedicoPageState extends State<VisorMedicoPage> {
     super.dispose();
   }
 
-  Future<void> _loadDocuments() async {
-    try {
-      setState(() => _loading = true);
-
-      // Cargar documentos desde Supabase
-      final response = await _db
-          .from('documents')
-          .select('*')
-          .order('created_at', ascending: false);
-
-      final documents = response.map<DocumentItem>((doc) {
-        return DocumentItem(
-          id: doc['id'].toString(),
-          name: doc['name'] ?? 'Sin nombre',
-          paciente: doc['patient_name'],
-          createdAt: DateTime.parse(doc['created_at']),
-          sizeBytes: doc['size_bytes'] ?? 0,
-          localPath: doc['local_path'],
-          previewUrl: doc['preview_url'],
-        );
-      }).toList();
-
-      setState(() {
-        _docs = documents;
-        _loading = false;
-      });
-    } catch (e) {
-      print('Error cargando documentos: $e');
-      setState(() {
-        _loading = false;
-        // Datos de ejemplo como fallback
-        _docs = [
-          DocumentItem(
-            id: '1',
-            name: 'Análisis de sangre - Max.pdf',
-            paciente: 'Max (Perro)',
-            createdAt: DateTime.now().subtract(const Duration(days: 1)),
-            sizeBytes: 2200000,
-            localPath: null,
-          ),
-          DocumentItem(
-            id: '2',
-            name: 'Consentimiento Cirugía - Luna.pdf',
-            paciente: 'Luna (Gato)',
-            createdAt: DateTime.now().subtract(const Duration(days: 2)),
-            sizeBytes: 850000,
-            localPath: null,
-          ),
-        ];
-      });
-    }
-  }
-
-  List<DocumentItem> get _filtered {
-    final q = _tableQuery.trim().toLowerCase();
-    final result = _docs.where((d) {
-      if (q.isEmpty) return true;
-      final inName = d.name.toLowerCase().contains(q);
-      final inPac = (d.paciente ?? '').toLowerCase().contains(q);
-      return inName || inPac;
-    }).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return result;
-  }
-
-  void _onSelect(int idx) {
-    setState(() {
-      _selectedIndex = idx;
-      _loadPreviewFor(_filtered[idx]);
-    });
-  }
-
-  Future<void> _loadPreviewFor(DocumentItem d) async {
-    _pdfController?.dispose();
-    _pdfController = null;
-    _pdfPage = 1;
-    _pdfPageCount = 0;
-
-    final kind = kindFromName(d.name);
-    if (kind == DocKind.pdf) {
-      // Si tienes d.localPath, úsala. Si no, podrías cargar desde bytes/red.
-      // Para demo, si no hay ruta, el PdfController no se carga (mostrar placeholder).
-      if (d.localPath != null && await File(d.localPath!).exists()) {
-        final controller = PdfControllerPinch(
-          document: PdfDocument.openFile(d.localPath!),
-          initialPage: 1,
-        );
-        controller.loadDocument(PdfDocument.openFile(d.localPath!));
-        _pdfController = controller;
-        // TODO: Implementar listener para pageCount
-        setState(() {});
-      }
-    }
-  }
-
-  String _fmtSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    final kb = bytes / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    final mb = kb / 1024;
-    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
-    final gb = mb / 1024;
-    return '${gb.toStringAsFixed(1)} GB';
-  }
-
-  // ==== UI ====
-
   @override
   Widget build(BuildContext context) {
-    final selDoc = _selectedIndex != null && _selectedIndex! < _filtered.length
-        ? _filtered[_selectedIndex!]
-        : null;
-
-    return Theme(
-      data: Theme.of(context).copyWith(
-        focusColor: AppColors.primary500.withOpacity(.12),
-        hoverColor: AppColors.neutral50,
-        splashColor: AppColors.primary500.withOpacity(.08),
-        colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.primary500,
-              secondary: AppColors.primary600,
-              surface: Colors.white,
-              onSurface: AppColors.neutral900,
-            ),
-      ),
-      child: Scaffold(
-        backgroundColor: AppColors.neutral50,
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ==== SIDEBAR ====
-            AppSidebar(
-              activeRoute: 'frame_visor_medico',
-              onTap: (route) {
-                if (route == 'frame_home') {
-                  NavigationHelper.navigateToRoute(context, '/home');
-                } else if (route == 'frame_visor_medico') {
-                  // Ya estamos en el visor médico
-                } else {
-                  // Navegar a la página correspondiente
-                  String routePath = '/home'; // fallback
-                  switch (route) {
-                    case 'frame_pacientes':
-                      routePath = '/pacientes';
-                      break;
-                    case 'frame_historias':
-                      routePath = '/historias';
-                      break;
-                    case 'frame_recetas':
-                      routePath = '/recetas';
-                      break;
-                    case 'frame_laboratorio':
-                      routePath = '/laboratorio';
-                      break;
-                    case 'frame_agenda':
-                      routePath = '/agenda';
-                      break;
-                    case 'frame_recursos':
-                      routePath = '/recursos';
-                      break;
-                    case 'frame_tickets':
-                      routePath = '/tickets';
-                      break;
-                    case 'frame_reportes':
-                      routePath = '/reportes';
-                      break;
-                  }
-                  NavigationHelper.navigateToRoute(context, routePath);
-                }
-              },
-              userRole: UserRole.doctor,
-            ),
-            // ==== CONTENIDO PRINCIPAL ====
-            Expanded(
+    return Container(
+      color: AppTheme.neutral50,
+      child: Row(
+        children: [
+          // ====== Panel izquierdo: tabla/lista ======
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.space16),
               child: Column(
                 children: [
-                  _TopBar(
-                    onRefresh: _loadDocuments,
-                    onUpload: () {
-                      // TODO: Implementar subida de archivos
-                    },
-                  ),
-                  const Divider(height: 1, color: AppColors.neutral200),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // ==== LISTA DE DOCUMENTOS ====
-                          Expanded(
-                            flex: 3,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _centerToolbar(),
-                                const SizedBox(height: 16),
-                                Expanded(
-                                  child: Card(
-                                    elevation: 0,
-                                    color: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: _loading
-                                        ? const Center(
-                                            child: CircularProgressIndicator(),
-                                          )
-                                        : _gridView
-                                            ? _gridList(selDoc)
-                                            : _tableList(selDoc),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          // ==== PANEL DE PREVIEW ====
-                          SizedBox(
-                            width: 380,
-                            child: _previewPanel(selDoc),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  _buildToolbar(),
+                  const SizedBox(height: AppTheme.space12),
+                  Expanded(child: _buildTable()),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+
+          // ====== Panel derecho: preview y metadatos ======
+          SizedBox(
+            width: 380,
+            child: _buildRightPanel(),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _centerToolbar() {
-    return Row(
+  // ======= Toolbar con filtros y acciones =======
+  Widget _buildToolbar() {
+    return Column(
       children: [
-        ElevatedButton.icon(
-          onPressed: () {}, // TODO: subir (selector/drag)
-          icon: const Icon(Icons.upload_file),
-          label: const Text('Subir'),
-        ),
-        const SizedBox(width: AppTheme.space8),
-        OutlinedButton.icon(
-          onPressed: () {}, // TODO: filtros avanzados
-          icon: const Icon(Icons.filter_list),
-          label: const Text('Filtros'),
-        ),
-        const Spacer(),
-        IconButton(
-          tooltip: 'Refrescar',
-          onPressed: () {},
-          icon: const Icon(Icons.refresh),
-        ),
-        const SizedBox(width: AppTheme.space8),
-        ToggleButtons(
-          isSelected: [_gridView == false, _gridView == true],
-          onPressed: (idx) => setState(() => _gridView = idx == 1),
-          borderRadius: BorderRadius.circular(8),
-          constraints: const BoxConstraints(minHeight: 38, minWidth: 44),
-          children: const [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Icon(Icons.list),
+        // Barra de búsqueda
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                decoration: const InputDecoration(
+                  hintText: 'Buscar por nombre, paciente, tags...',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                onChanged: (v) {
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    if (mounted) _fetchDocs();
+                  });
+                },
+              ),
             ),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Icon(Icons.grid_view),
+            const SizedBox(width: AppTheme.space12),
+            IconButton(
+              tooltip: 'Refrescar',
+              icon: const Icon(Icons.refresh),
+              onPressed: _refresh,
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0xFFF3F4F6),
+                foregroundColor: const Color(0xFF374151),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppTheme.space12),
+        // Filtros y acciones
+        Wrap(
+          spacing: AppTheme.space12,
+          runSpacing: AppTheme.space8,
+          children: [
+            // Filtro por tipo
+            SizedBox(
+              width: 200,
+              child: DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Tipo',
+                  border: OutlineInputBorder(),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('Todos')),
+                  DropdownMenuItem(value: 'pdf', child: Text('PDF')),
+                  DropdownMenuItem(value: 'image', child: Text('Imágenes')),
+                  DropdownMenuItem(
+                      value: 'document', child: Text('Documentos')),
+                ],
+                onChanged: (value) {
+                  // TODO: Implementar filtro por tipo
+                },
+              ),
+            ),
+            // Filtro por fecha
+            SizedBox(
+              width: 180,
+              child: DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Fecha',
+                  border: OutlineInputBorder(),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('Todas')),
+                  DropdownMenuItem(value: 'today', child: Text('Hoy')),
+                  DropdownMenuItem(value: 'week', child: Text('Semana')),
+                  DropdownMenuItem(value: 'month', child: Text('Mes')),
+                ],
+                onChanged: (value) {
+                  // TODO: Implementar filtro por fecha
+                },
+              ),
+            ),
+            // Botón de subir
+            ElevatedButton.icon(
+              onPressed: _onUpload,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Subir'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary500,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            // Botón de prueba de conexión
+            ElevatedButton.icon(
+              onPressed: _testConnection,
+              icon: const Icon(Icons.network_check),
+              label: const Text('Probar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.warning500,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
             ),
           ],
         ),
@@ -345,745 +332,1047 @@ class _VisorMedicoPageState extends State<VisorMedicoPage> {
     );
   }
 
-  // ==== Tabla (Lista densa) ====
-  Widget _tableList(DocumentItem? selected) {
-    final rows = _filtered;
-    return Column(
-      children: [
-        // buscador tabla
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Buscar por nombre, paciente...',
-                  ),
-                  onChanged: (v) => setState(() => _tableQuery = v),
-                ),
-              ),
-            ],
+  // ======= Tabla de documentos =======
+  Widget _buildTable() {
+    if (_isLoading) {
+      return const Card(
+        child: SizedBox(
+          width: double.infinity,
+          height: 260,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Cargando documentos...'),
+              ],
+            ),
           ),
         ),
-        const Divider(height: 1),
-        Expanded(
-          child: ListView.separated(
-            itemCount: rows.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final d = rows[i];
-              final isSel = selected != null && d.id == selected.id;
-              final kind = kindFromName(d.name);
-              final iconColor = colorForKind(kind);
+      );
+    }
 
-              return InkWell(
-                onTap: () => _onSelect(i),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color:
-                        isSel ? AppColors.primary500.withOpacity(0.07) : null,
-                    border: Border(
-                      left: BorderSide(
-                        color:
-                            isSel ? AppColors.primary500 : Colors.transparent,
-                        width: 3,
-                      ),
+    if (_errorMessage != null) {
+      return Card(
+        child: SizedBox(
+          width: double.infinity,
+          height: 260,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error, color: Colors.red, size: 48),
+                SizedBox(height: 16),
+                Text(_errorMessage!, textAlign: TextAlign.center),
+                SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _fetchDocs,
+                  child: Text('Reintentar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_docs.isEmpty) {
+      return const Card(
+        child: SizedBox(
+          width: double.infinity,
+          height: 260,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.folder_open, size: 48, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No hay documentos para mostrar'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.space16,
+              vertical: AppTheme.space12,
+            ),
+            color: AppTheme.neutral50,
+            child: Row(
+              children: [
+                _cellHeader('Nombre', flex: 4),
+                _cellHeader('Paciente', flex: 3),
+                _cellHeader('Fecha', flex: 2),
+                _cellHeader('Tamaño', flex: 2),
+                const SizedBox(width: AppTheme.space16),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.separated(
+              itemCount: _docs.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final d = _docs[index];
+                final kind = kindFromName(d.name);
+                final color = colorForKind(kind);
+                final isSelected = _selectedIndex == index;
+
+                return InkWell(
+                  onTap: () async {
+                    setState(() => _selectedIndex = index);
+                    await _loadPreviewFor(d);
+                  },
+                  child: Container(
+                    color: isSelected ? const Color(0xFFEFF2FF) : null,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.space16,
+                      vertical: AppTheme.space12,
                     ),
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Icon(iconForKind(kind), color: iconColor, size: 22),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          d.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.neutral900,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 2,
-                        child: (d.paciente != null)
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(.12),
-                                  border: Border.all(
-                                      color: Colors.green.withOpacity(.35)),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
+                    child: Row(
+                      children: [
+                        // Nombre + icono
+                        Expanded(
+                          flex: 4,
+                          child: Row(
+                            children: [
+                              Icon(iconForKind(kind), color: color),
+                              const SizedBox(width: AppTheme.space12),
+                              Flexible(
                                 child: Text(
-                                  d.paciente!,
-                                  style: const TextStyle(
-                                      color: Colors.green,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600),
-                                  maxLines: 1,
+                                  d.name,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.neutral900,
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              )
-                            : Text('No asignado',
-                                style: TextStyle(
-                                  color: AppColors.neutral500,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 1,
-                        child: Text(
-                          _fmtDate(d.createdAt),
-                          style: const TextStyle(color: AppColors.neutral500),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 1,
-                        child: Text(
-                          _fmtSize(d.sizeBytes),
-                          style: const TextStyle(color: AppColors.neutral500),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Más',
-                        onPressed: () {}, // TODO: menú ⋮
-                        icon: const Icon(Icons.more_vert),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ==== Grid (Cards) ====
-  Widget _gridList(DocumentItem? selected) {
-    final rows = _filtered;
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Buscar por nombre, paciente...',
-                  ),
-                  onChanged: (v) => setState(() => _tableQuery = v),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        const SizedBox(height: 16),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 300,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.4,
-            ),
-            itemCount: rows.length,
-            itemBuilder: (_, i) {
-              final d = rows[i];
-              final k = kindFromName(d.name);
-              final c = colorForKind(k);
-              final isSel = selected != null && d.id == selected.id;
-
-              return InkWell(
-                onTap: () => _onSelect(i),
-                child: Card(
-                  color: isSel
-                      ? AppColors.primary500.withOpacity(0.05)
-                      : Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(iconForKind(k), color: c, size: 22),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                d.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600),
                               ),
-                            ),
-                            IconButton(
-                              onPressed: () {},
-                              icon: const Icon(Icons.more_horiz),
-                            )
-                          ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            DocBadge(d.name),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                d.paciente ?? 'No asignado',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    color: AppColors.neutral500),
+                        // Paciente
+                        Expanded(
+                          flex: 3,
+                          child: Row(
+                            children: [
+                              _chip(
+                                text: 'No asignado',
+                                bg: const Color(0xFFF3F4F6),
+                                fg: AppTheme.neutral500,
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const Spacer(),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _fmtDate(d.createdAt),
-                                style: const TextStyle(
-                                    color: AppColors.neutral500),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _fmtSize(d.sizeBytes),
-                              style:
-                                  const TextStyle(color: AppColors.neutral500),
-                            ),
-                          ],
+                        // Fecha
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            d.updatedAt != null
+                                ? _formatDate(d.updatedAt!)
+                                : 'N/A',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: AppTheme.neutral500),
+                          ),
+                        ),
+                        // Tamaño
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            'N/A',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: AppTheme.neutral500),
+                          ),
+                        ),
+                        const SizedBox(width: AppTheme.space16),
+                        // Iconos de acción
+                        IconButton(
+                          tooltip: 'Descargar',
+                          icon: const Icon(Icons.download, size: 20),
+                          onPressed: () => _downloadFile(d),
+                          style: IconButton.styleFrom(
+                            foregroundColor: AppTheme.primary500,
+                            padding: const EdgeInsets.all(12),
+                          ),
+                        ),
+                        const SizedBox(width: AppTheme.space8),
+                        IconButton(
+                          tooltip: 'Abrir',
+                          icon: const Icon(Icons.open_in_new, size: 20),
+                          onPressed: () => _openFile(d),
+                          style: IconButton.styleFrom(
+                            foregroundColor: AppTheme.success500,
+                            padding: const EdgeInsets.all(12),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  // ==== Panel de previsualización ====
-  Widget _previewPanel(DocumentItem? d) {
-    return Card(
+  Widget _cellHeader(String text, {int flex = 1}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.neutral500,
+        ),
+      ),
+    );
+  }
+
+  Widget _chip({required String text, required Color bg, required Color fg}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.space8,
+        vertical: AppTheme.space4,
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+            fontSize: 12, fontWeight: FontWeight.w600, color: fg),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  // ======= Panel derecho =======
+  Widget _buildRightPanel() {
+    if (_selectedIndex == null || _docs.isEmpty) {
+      return Container(
+        color: Colors.white,
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.folder_open, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Selecciona un documento',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'para ver detalles y previsualizar',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final item = _docs[_selectedIndex!];
+    final kind = kindFromName(item.name);
+    final color = colorForKind(kind);
+
+    return Container(
+      color: Colors.white,
       child: Column(
         children: [
-          // header
+          // Header con botón de cerrar
           Container(
-            padding: const EdgeInsets.all(AppTheme.space12),
-            decoration: BoxDecoration(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Colors.white,
               border: Border(
                 bottom: BorderSide(color: AppTheme.neutral200),
               ),
             ),
             child: Row(
               children: [
-                if (d != null) ...[
-                  Icon(iconForKind(kindFromName(d.name)),
-                      color: colorForKind(kindFromName(d.name))),
-                  const SizedBox(width: AppTheme.space8),
-                  Expanded(
+                Expanded(
+                  child: Text(
+                    'Detalles del documento',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.neutral900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() => _selectedIndex = null),
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFF3F4F6),
+                    foregroundColor: const Color(0xFF4B5563),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Canvas principal con información del archivo
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  // Canvas rectangular con icono centrado
+                  Container(
+                    width: double.infinity,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8F9FA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.neutral200),
+                    ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(d.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.headlineSmall),
+                        // Icono cuadrado centrado
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: color.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            iconForKind(kind),
+                            color: Colors.white,
+                            size: 40,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         Text(
-                          '${_labelForName(d.name)} - ${_fmtSize(d.sizeBytes)}',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                          kind.name.toUpperCase(),
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF4B5563),
+                            letterSpacing: 1.2,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ] else
-                  Text('Selecciona un documento',
-                      style: Theme.of(context).textTheme.bodyMedium),
-                IconButton(
-                  tooltip: 'Cerrar',
-                  onPressed: () => setState(() => _selectedIndex = null),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-          ),
 
-          // visor
-          Expanded(
-            child: Container(
-              color: AppTheme.neutral50,
-              padding: const EdgeInsets.all(AppTheme.space12),
-              child: d == null ? const SizedBox.shrink() : _buildViewer(d),
-            ),
-          ),
+                  const SizedBox(height: 24),
 
-          // acciones inferiores
-          Container(
-            padding: const EdgeInsets.all(AppTheme.space12),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: AppTheme.neutral200),
-              ),
-            ),
-            child: Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: d == null
-                      ? null
-                      : () {
-                          // TODO: descargar
-                        },
-                  icon: const Icon(Icons.download),
-                  label: const Text(''),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.space12,
-                        vertical: AppTheme.space8),
-                    minimumSize: const Size(44, 40),
+                  // Información del archivo
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.neutral200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Información del archivo',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.neutral900,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoRow('Nombre', item.name),
+                        _buildInfoRow('Tamaño', _formatFileSize(item.name)),
+                        _buildInfoRow('Tipo', kind.name.toUpperCase()),
+                        _buildInfoRow('Fecha',
+                            _formatDate(item.updatedAt ?? DateTime.now())),
+                        _buildInfoRow('Estado', 'Disponible'),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppTheme.space8),
-                OutlinedButton.icon(
-                  onPressed: d == null
-                      ? null
-                      : () {
-                          // TODO: imprimir
-                        },
-                  icon: const Icon(Icons.print),
-                  label: const Text(''),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.space12,
-                        vertical: AppTheme.space8),
-                    minimumSize: const Size(44, 40),
-                  ),
-                ),
-                const SizedBox(width: AppTheme.space8),
-                OutlinedButton.icon(
-                  onPressed: d == null ? null : () {},
-                  icon: const Icon(Icons.edit),
-                  label: const Text(''),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.space12,
-                        vertical: AppTheme.space8),
-                    minimumSize: const Size(44, 40),
-                  ),
-                ),
-                const Spacer(),
-                if (d != null && kindFromName(d.name) == DocKind.pdf)
+
+                  const Spacer(),
+
+                  // Botones de acción
                   Row(
                     children: [
-                      IconButton(
-                        tooltip: 'Zoom +',
-                        onPressed: _pdfController == null
-                            ? null
-                            : () {
-                                // TODO: Implementar zoom in
-                              },
-                        icon: const Icon(Icons.zoom_in),
+                      // Botón de descarga
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _downloadFile(item),
+                          icon: const Icon(Icons.download, size: 18),
+                          label: const Text('Descargar'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary500,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
                       ),
-                      IconButton(
-                        tooltip: 'Zoom -',
-                        onPressed: _pdfController == null
-                            ? null
-                            : () {
-                                // TODO: Implementar zoom out
-                              },
-                        icon: const Icon(Icons.zoom_out),
+                      const SizedBox(width: 12),
+                      // Botón de apertura
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _openFile(item),
+                          icon: const Icon(Icons.open_in_new, size: 18),
+                          label: const Text('Abrir'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.success500,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: AppTheme.space8),
-                      IconButton(
-                        tooltip: 'Anterior',
-                        onPressed: _pdfController == null || _pdfPage <= 1
-                            ? null
-                            : () {
-                                _pdfController!.previousPage(
-                                    curve: Curves.easeInOut,
-                                    duration:
-                                        const Duration(milliseconds: 150));
-                                setState(() => _pdfPage =
-                                    (_pdfPage - 1).clamp(1, _pdfPageCount));
-                              },
-                        icon: const Icon(Icons.chevron_left),
-                      ),
-                      Text(
-                          '$_pdfPage / ${_pdfPageCount == 0 ? '-' : _pdfPageCount}',
-                          style: Theme.of(context).textTheme.bodyMedium),
-                      IconButton(
-                        tooltip: 'Siguiente',
-                        onPressed: _pdfController == null ||
-                                (_pdfPageCount > 0 && _pdfPage >= _pdfPageCount)
-                            ? null
-                            : () {
-                                _pdfController!.nextPage(
-                                    curve: Curves.easeInOut,
-                                    duration:
-                                        const Duration(milliseconds: 150));
-                                setState(() => _pdfPage = _pdfPage + 1);
-                              },
-                        icon: const Icon(Icons.chevron_right),
-                      ),
-                      const SizedBox(width: AppTheme.space8),
-                      IconButton(
-                        tooltip: 'Pantalla completa',
-                        onPressed: () =>
-                            setState(() => _isFullscreen = !_isFullscreen),
-                        icon: const Icon(Icons.fullscreen),
+                      const SizedBox(width: 12),
+                      // Botón circular de edición
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6),
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: IconButton(
+                          onPressed: () => _showAssignDialog(item),
+                          icon: const Icon(Icons.edit,
+                              color: Colors.white, size: 20),
+                          tooltip: 'Editar',
+                        ),
                       ),
                     ],
                   ),
-              ],
+                ],
+              ),
             ),
           ),
-
-          // formulario de metadatos (debajo de acciones, como en tu HTML)
-          Container(
-            padding: const EdgeInsets.all(AppTheme.space12),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: AppTheme.neutral200)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _fieldLabel('Tipo'),
-                const SizedBox(height: AppTheme.space8),
-                DropdownButtonFormField<String>(
-                  initialValue: _guessTypeForSelected(),
-                  items: const [
-                    DropdownMenuItem(
-                        value: 'Análisis', child: Text('Análisis')),
-                    DropdownMenuItem(
-                        value: 'Consentimiento', child: Text('Consentimiento')),
-                    DropdownMenuItem(value: 'Receta', child: Text('Receta')),
-                    DropdownMenuItem(value: 'Imagen', child: Text('Imagen')),
-                  ],
-                  onChanged: (v) {/* TODO: persistir */},
-                ),
-                const SizedBox(height: AppTheme.space12),
-                _fieldLabel('Paciente/Mascota'),
-                const SizedBox(height: AppTheme.space8),
-                TextFormField(
-                  initialValue: _selectedIndex != null &&
-                          _selectedIndex! < _filtered.length
-                      ? _filtered[_selectedIndex!].paciente
-                      : '',
-                  onChanged: (v) {/* TODO: persistir */},
-                ),
-                const SizedBox(height: AppTheme.space12),
-                _fieldLabel('Tags'),
-                const SizedBox(height: AppTheme.space8),
-                TextFormField(
-                  initialValue: 'cirugía, felino, urgente', // demo
-                  onChanged: (v) {/* TODO: persistir */},
-                ),
-                const SizedBox(height: AppTheme.space12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {/* TODO: guardar (Ctrl+S) */},
-                    child: const Text('Guardar Cambios (Ctrl+S)'),
-                  ),
-                ),
-              ],
-            ),
-          )
         ],
       ),
     );
   }
 
-  Widget _buildViewer(DocumentItem d) {
-    final kind = kindFromName(d.name);
-    if (kind == DocKind.pdf) {
-      if (_pdfController == null) {
-        // Placeholder si aún no hay ruta/ctrl PDF
-        return _emptyPreview(
-            'PDF no cargado (asigna d.localPath o carga desde red)');
-      }
-      return PdfViewPinch(
-        controller: _pdfController!,
-        onDocumentLoaded: (doc) async {
-          // TODO: Implementar pageCount
-          setState(() {
-            _pdfPageCount = 1; // Placeholder
-            _pdfPage = 1;
-          });
-        },
-        onPageChanged: (page) => setState(() => _pdfPage = page),
-      );
-    } else if (kind == DocKind.image) {
-      // Si tienes una ruta local
-      if (d.localPath != null && File(d.localPath!).existsSync()) {
-        return InteractiveViewer(
-          child: Image.file(
-            File(d.localPath!),
-            fit: BoxFit.contain,
+  Widget _buildSimplePreview(DocItem item, DocKind kind) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.neutral200),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colorForKind(kind).withOpacity(0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(iconForKind(kind), color: colorForKind(kind), size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  'Vista previa de ${kind.name.toUpperCase()}',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: colorForKind(kind),
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      }
-      // O puedes usar previewUrl (network) si tienes
-      return _emptyPreview(
-          'Imagen no disponible (asigna localPath o previewUrl)');
-    } else {
-      return _emptyPreview('Tipo no previsualizable. Usa “Descargar/Abrir”.');
-    }
-  }
-
-  Widget _emptyPreview(String msg) {
-    return Center(
-      child: Text(
-        msg,
-        textAlign: TextAlign.center,
-        style: TextStyle(color: AppTheme.neutral500),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(iconForKind(kind), size: 48, color: colorForKind(kind)),
+                  const SizedBox(height: 12),
+                  Text(
+                    item.name,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.neutral900,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${kind.name.toUpperCase()} • ${_formatFileSize(item.name)}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.neutral500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  String _labelForName(String name) {
-    final k = kindFromName(name);
-    return switch (k) {
-      DocKind.pdf => 'PDF Document',
-      DocKind.word => 'Word Document',
-      DocKind.sheets => 'Spreadsheet',
-      DocKind.image => 'Image',
-      DocKind.slides => 'Presentation',
-      DocKind.text => 'Text File',
-      DocKind.other => 'File',
-    };
-  }
-
-  String _fmtDate(DateTime d) {
-    // Simple dd MMM yyyy (puedes usar intl si prefieres)
-    const months = [
-      'Ene',
-      'Feb',
-      'Mar',
-      'Abr',
-      'May',
-      'Jun',
-      'Jul',
-      'Ago',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dic'
-    ];
-    return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
-  }
-
-  String? _guessTypeForSelected() {
-    if (_selectedIndex == null || _selectedIndex! >= _filtered.length) {
-      return null;
-    }
-    final k = kindFromName(_filtered[_selectedIndex!].name);
-    return switch (k) {
-      DocKind.pdf => 'Consentimiento', // demo; mapea según tu lógica real
-      DocKind.word => 'Análisis',
-      DocKind.sheets => 'Análisis',
-      DocKind.image => 'Imagen',
-      DocKind.slides => 'Presentación',
-      DocKind.text => 'Texto',
-      DocKind.other => null,
-    };
-  }
-
-  Widget _fieldLabel(String text) => Text(
-        text,
-        style: Theme.of(context)
-            .textTheme
-            .labelMedium
-            ?.copyWith(color: AppTheme.neutral700, fontWeight: FontWeight.w600),
-      );
-}
-
-// ==== TOPBAR ====
-class _TopBar extends StatelessWidget {
-  final VoidCallback onRefresh;
-  final VoidCallback onUpload;
-
-  const _TopBar({
-    required this.onRefresh,
-    required this.onUpload,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 0,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: AppColors.neutral200, width: 1),
-          ),
-        ),
-        child: Row(
+  // ======= Menú fila =======
+  void _showRowMenu(DocItem d) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Wrap(
           children: [
-            // Breadcrumb
-            Row(
-              children: [
-                Text('Home',
-                    style: AppText.bodyM.copyWith(color: AppColors.neutral500)),
-                const SizedBox(width: 8),
-                Icon(Iconsax.arrow_right_3,
-                    size: 16, color: AppColors.neutral400),
-                const SizedBox(width: 8),
-                Text('Visor Médico',
-                    style: AppText.bodyM.copyWith(
-                        color: AppColors.neutral900,
-                        fontWeight: FontWeight.w500)),
-              ],
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Descargar'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _loadPreviewFor(d);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Descargado: ${d.name}')),
+                  );
+                }
+              },
             ),
-            const Spacer(),
-            // Botones de acción
-            _TopBarButton(
-              icon: Iconsax.add,
-              tooltip: 'Subir documento',
-              onPressed: onUpload,
-            ),
-            const SizedBox(width: 8),
-            _TopBarButton(
-              icon: Iconsax.refresh,
-              tooltip: 'Actualizar',
-              onPressed: onRefresh,
-            ),
-            const SizedBox(width: 8),
-            _TopBarButton(
-              icon: Iconsax.notification,
-              tooltip: 'Notificaciones',
-              badge: '3',
-              onPressed: () {},
-            ),
-            const SizedBox(width: 16),
-            // Avatar de usuario
-            GestureDetector(
-              onTap: () {},
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary500, width: 2),
-                ),
-                child: const CircleAvatar(
-                  radius: 16,
-                  backgroundImage: AssetImage('Assets/Images/ProfileImage.png'),
-                ),
-              ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Asignar a paciente/record'),
+              onTap: () {
+                Navigator.pop(context);
+                _showAssignDialog(d);
+              },
             ),
           ],
         ),
       ),
     );
   }
+
+  // ======= Asignar (mock simple: mueve de inbox a medical_records) =======
+  Future<void> _showAssignDialog(DocItem d) async {
+    // En producción muestra buscador de paciente y record reales.
+    final patientIdCtrl = TextEditingController();
+    final recordIdCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Asignar documento'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: patientIdCtrl,
+              decoration: const InputDecoration(labelText: 'patient_id (UUID)'),
+            ),
+            const SizedBox(height: AppTheme.space8),
+            TextField(
+              controller: recordIdCtrl,
+              decoration: const InputDecoration(labelText: 'record_id (UUID)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              if (patientIdCtrl.text.isEmpty || recordIdCtrl.text.isEmpty)
+                return;
+              // TODO: Implementar asignación usando el nuevo DocsRepository
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(
+                          'Asignación de ${d.name} pendiente de implementar')),
+                );
+              }
+              await _fetchDocs();
+            },
+            child: const Text('Asignar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ======= Subir a inbox (opcional) =======
+  Future<void> _onUpload() async {
+    // Si quieres habilitar subida directa desde desktop/mobile:
+    // - agrega file_selector u otro picker
+    // - aquí solo dejo un placeholder de ejemplo
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Implementa el picker y usa StorageService.upload(...)'),
+      ));
+    }
+  }
+
+  Future<void> _testConnection() async {
+    try {
+      final fileService = FileService();
+      final result = await fileService.testConnection();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message']),
+            backgroundColor: result['success']
+                ? (result['isAccessible']
+                    ? AppTheme.success500
+                    : AppTheme.warning500)
+                : AppTheme.danger500,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error de conexión: $e'),
+            backgroundColor: AppTheme.danger500,
+          ),
+        );
+      }
+    }
+  }
+
+  // ======= Funciones de acción =======
+  Future<void> _downloadFile(DocItem item) async {
+    try {
+      final fileService = FileService();
+      await fileService.downloadToDownloads(item.url, item.name);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Archivo descargado a Descargas: ${item.name}'),
+            backgroundColor: AppTheme.success500,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error descargando: $e'),
+            backgroundColor: AppTheme.danger500,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openFile(DocItem item) async {
+    try {
+      final fileType = item.name.split('.').last.toLowerCase();
+
+      // Mostrar el visor de archivos en ventana emergente
+      await showDialog(
+        context: context,
+        builder: (context) => FileViewerDialog(
+          fileName: item.name,
+          fileUrl: item.url,
+          fileType: fileType,
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error abriendo archivo: $e'),
+            backgroundColor: AppTheme.danger500,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareFile(DocItem item) async {
+    // TODO: Implementar compartir archivo
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Compartiendo archivo: ${item.name}'),
+          backgroundColor: AppTheme.warning500,
+        ),
+      );
+    }
+  }
+
+  Future<void> _editMetadata(DocItem item) async {
+    final nameController = TextEditingController(text: item.name);
+    final patientController = TextEditingController();
+    final tagsController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar metadatos'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration:
+                  const InputDecoration(labelText: 'Nombre del archivo'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: patientController,
+              decoration: const InputDecoration(labelText: 'Paciente asignado'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: tagsController,
+              decoration: const InputDecoration(
+                  labelText: 'Tags (separados por comas)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Implementar actualización de metadatos
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Metadatos actualizados')),
+              );
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteFile(DocItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar archivo'),
+        content: Text('¿Estás seguro de que quieres eliminar "${item.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.danger500,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      // TODO: Implementar eliminación de archivo
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Archivo eliminado: ${item.name}'),
+          backgroundColor: AppTheme.danger500,
+        ),
+      );
+      await _fetchDocs();
+    }
+  }
+
+  // ======= Widgets auxiliares =======
+  Widget _infoChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        '$label: $value',
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: AppTheme.neutral700,
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value, {bool isUrl = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF4B5563),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: isUrl ? AppTheme.primary500 : AppTheme.neutral900,
+              ),
+              maxLines: isUrl ? 2 : 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+    bool isSecondary = false,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isSecondary ? Colors.transparent : color,
+        foregroundColor: isSecondary ? color : Colors.white,
+        side: isSecondary ? BorderSide(color: color) : null,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  // ======= Helpers =======
+  Widget _buildInfoRow(String label, String value, {bool isUrl = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF4B5563),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: isUrl ? AppTheme.primary500 : AppTheme.neutral900,
+              ),
+              maxLines: isUrl ? 2 : 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final two = (int n) => n.toString().padLeft(2, '0');
+    return '${two(dt.day)}/${two(dt.month)}/${dt.year}';
+  }
+
+  String _formatFileSize(String filename) {
+    // Simulación de tamaño de archivo
+    final random = filename.hashCode % 1000;
+    if (random < 100) return '${random}KB';
+    if (random < 1000) return '${(random / 1024).toStringAsFixed(1)}MB';
+    return '${(random / 1024 / 1024).toStringAsFixed(1)}GB';
+  }
 }
 
-class _TopBarButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final String? badge;
-  final VoidCallback onPressed;
+// ======= Clase para navegación =======
+class VisorMedicoPage extends StatelessWidget {
+  const VisorMedicoPage({super.key});
 
-  const _TopBarButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-    this.badge,
-  });
+  static const route = '/visor-medico';
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        IconButton(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 20),
-          tooltip: tooltip,
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.neutral50,
-            foregroundColor: AppColors.neutral700,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            minimumSize: const Size(40, 40),
-            padding: EdgeInsets.zero,
+    return Scaffold(
+      backgroundColor: AppTheme.neutral50,
+      body: Row(
+        children: [
+          // ==== SIDEBAR ====
+          AppSidebar(
+            activeRoute: 'frame_visor_medico',
+            onTap: (route) {
+              if (route == 'frame_home') {
+                NavigationHelper.navigateToRoute(context, '/home');
+              } else if (route == 'frame_visor_medico') {
+                // Ya estamos en el visor médico
+              } else {
+                // Navegar a la página correspondiente
+                String routePath = '/home'; // fallback
+                switch (route) {
+                  case 'frame_pacientes':
+                    routePath = '/pacientes';
+                    break;
+                  case 'frame_historias':
+                    routePath = '/historias';
+                    break;
+                  case 'frame_recetas':
+                    routePath = '/recetas';
+                    break;
+                  case 'frame_laboratorio':
+                    routePath = '/laboratorio';
+                    break;
+                  case 'frame_agenda':
+                    routePath = '/agenda';
+                    break;
+                  case 'frame_recursos':
+                    routePath = '/recursos';
+                    break;
+                  case 'frame_tickets':
+                    routePath = '/tickets';
+                    break;
+                  case 'frame_reportes':
+                    routePath = '/reportes';
+                    break;
+                }
+                NavigationHelper.navigateToRoute(context, routePath);
+              }
+            },
+            userRole: UserRole.doctor,
           ),
-        ),
-        if (badge != null)
-          Positioned(
-            right: 6,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: const BoxDecoration(
-                color: AppColors.danger500,
-                shape: BoxShape.circle,
-              ),
-              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-              child: Text(
-                badge!,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
+          // ==== CONTENIDO PRINCIPAL ====
+          Expanded(
+            child: Column(
+              children: [
+                // TopBar
+                _TopBar(
+                  title: 'Visor Médico',
+                  onBack: () =>
+                      NavigationHelper.navigateToRoute(context, '/home'),
                 ),
-                textAlign: TextAlign.center,
-              ),
+                // Contenido del visor
+                const Expanded(
+                  child: VisorPage(),
+                ),
+              ],
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-// Intent classes for keyboard shortcuts
-class SearchIntent extends Intent {
-  const SearchIntent();
-}
+class _TopBar extends StatelessWidget {
+  final String title;
+  final VoidCallback onBack;
 
-class SaveIntent extends Intent {
-  const SaveIntent();
-}
+  const _TopBar({
+    required this.title,
+    required this.onBack,
+  });
 
-class PreviousPageIntent extends Intent {
-  const PreviousPageIntent();
-}
-
-class NextPageIntent extends Intent {
-  const NextPageIntent();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: AppTheme.neutral200),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Volver',
+          ),
+          const SizedBox(width: 16),
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.neutral900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

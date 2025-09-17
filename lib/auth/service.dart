@@ -1,5 +1,7 @@
 // lib/auth/service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/config.dart';
+import '../features/data/repository.dart';
 
 class SupabaseService {
   /// Último error de inicialización/ping (para mostrarlo en UI)
@@ -12,18 +14,21 @@ class SupabaseService {
   static Future<void> init({bool forceReinit = false}) async {
     if (_initialized && !forceReinit) return;
 
-    // Credenciales directas (más simple y confiable)
-    const url = 'https://oeqemxsjnpuclkmllacx.supabase.co';
-    const key =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lcWVteHNqbnB1Y2xrbWxsYWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMjkyMDgsImV4cCI6MjA3MzYwNTIwOH0.kD88szLnjuK51nDn3u6_wg0ej-HGe6MV2TwF24lxcfs';
+    try {
+      await Supabase.initialize(
+        url: AppConfig.supabaseUrl,
+        anonKey: AppConfig.supabaseAnonKey,
+        // debug: true, // opcional para verbose logs
+      );
 
-    await Supabase.initialize(
-      url: url,
-      anonKey: key,
-      // debug: true, // opcional para verbose logs
-    );
-
-    _initialized = true;
+      _initialized = true;
+      lastInitError = null;
+      lastInitStack = null;
+    } catch (e, stack) {
+      lastInitError = e;
+      lastInitStack = stack;
+      rethrow;
+    }
   }
 
   static SupabaseClient get client => Supabase.instance.client;
@@ -38,5 +43,19 @@ class SupabaseService {
       // Ajusta la columna a una que exista (id, uuid, etc.)
       await client.from(t).select('id').limit(1);
     }
+  }
+}
+
+class StorageIndexer {
+  /// Busca objetos en system_files/<clinicId>/inbox y crea filas en `documents`
+  /// si no existen. Úsalo para "enganchar" archivos que se subieron directo al bucket.
+  static Future<int> indexSystemInbox({
+    required String clinicId,
+    int limit = 200,
+  }) async {
+    return await Repository.indexSystemInbox(
+      clinicId: clinicId,
+      pageLimit: limit,
+    );
   }
 }
