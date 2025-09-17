@@ -628,6 +628,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return 'Historias Médicas';
       case 'frame_recetas':
         return 'Recetas';
+      case 'frame_laboratorio':
+        return 'Laboratorio';
       case 'frame_agenda':
         return 'Agenda & Calendario';
       case 'frame_visor_medico':
@@ -653,6 +655,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return Iconsax.health;
       case 'frame_recetas':
         return Iconsax.note_text;
+      case 'frame_laboratorio':
+        return Iconsax.bill;
       case 'frame_agenda':
         return Iconsax.calendar_1;
       case 'frame_visor_medico':
@@ -686,6 +690,7 @@ class _SideNav extends StatelessWidget {
       _NavItem('Pacientes', Iconsax.pet, 'frame_pacientes'),
       _NavItem('Historias médicas', Iconsax.health, 'frame_historias'),
       _NavItem('Recetas', Iconsax.note_text, 'frame_recetas'),
+      _NavItem('Laboratorio', Iconsax.bill, 'frame_laboratorio'),
       _NavItem('Agenda & Calendario', Iconsax.calendar_1, 'frame_agenda'),
       _NavItem('Visor médico', Iconsax.document_text, 'frame_visor_medico'),
       _NavItem('Recursos', Iconsax.book_1, 'frame_recursos'),
