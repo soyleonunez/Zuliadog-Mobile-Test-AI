@@ -641,98 +641,113 @@ class _TopBar extends StatelessWidget {
         child: Row(
           children: [
             // Breadcrumb
-            Row(
-              children: [
-                Text('Home',
-                    style: AppText.bodyM.copyWith(color: AppColors.neutral500)),
-                const SizedBox(width: 8),
-                Icon(Iconsax.arrow_right_3,
-                    size: 16, color: AppColors.neutral400),
-                const SizedBox(width: 8),
-                Text('Dashboard',
-                    style: AppText.bodyM.copyWith(
-                        color: AppColors.neutral900,
-                        fontWeight: FontWeight.w500)),
-              ],
+            Flexible(
+              child: Row(
+                children: [
+                  Text('Home',
+                      style:
+                          AppText.bodyM.copyWith(color: AppColors.neutral500)),
+                  const SizedBox(width: 8),
+                  Icon(Iconsax.arrow_right_3,
+                      size: 16, color: AppColors.neutral400),
+                  const SizedBox(width: 8),
+                  Text('Dashboard',
+                      style: AppText.bodyM.copyWith(
+                          color: AppColors.neutral900,
+                          fontWeight: FontWeight.w500)),
+                ],
+              ),
             ),
-            const Spacer(),
+            const SizedBox(width: 16),
 
             // Barra de búsqueda mejorada
-            Container(
-              width: 480,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.neutral50,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.neutral200, width: 1),
-              ),
-              child: TextField(
-                controller: searchController,
-                onChanged: onSearchChanged,
-                onSubmitted: onSearch,
-                decoration: InputDecoration(
-                  hintText: 'Buscar pacientes, documentos, tickets, historias…',
-                  hintStyle:
-                      AppText.bodyM.copyWith(color: AppColors.neutral400),
-                  prefixIcon: Icon(Iconsax.search_normal,
-                      size: 20, color: AppColors.neutral500),
-                  suffixIcon: isSearching
-                      ? const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+            Flexible(
+              flex: 2,
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.neutral50,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.neutral200, width: 1),
+                ),
+                child: TextField(
+                  controller: searchController,
+                  onChanged: onSearchChanged,
+                  onSubmitted: onSearch,
+                  decoration: InputDecoration(
+                    hintText:
+                        'Buscar pacientes, documentos, tickets, historias…',
+                    hintStyle:
+                        AppText.bodyM.copyWith(color: AppColors.neutral400),
+                    prefixIcon: Icon(Iconsax.search_normal,
+                        size: 20, color: AppColors.neutral500),
+                    suffixIcon: isSearching
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            onPressed: () => onSearch(searchController.text),
+                            icon: Icon(Iconsax.filter,
+                                size: 18, color: AppColors.neutral500),
+                            tooltip: 'Buscar',
                           ),
-                        )
-                      : IconButton(
-                          onPressed: () => onSearch(searchController.text),
-                          icon: Icon(Iconsax.filter,
-                              size: 18, color: AppColors.neutral500),
-                          tooltip: 'Buscar',
-                        ),
-                  border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 16),
 
             // Botones de acción
-            _TopBarButton(
-              icon: Iconsax.add,
-              tooltip: 'Añadir',
-              onPressed: () {},
-            ),
-            const SizedBox(width: 8),
-            _TopBarButton(
-              icon: Iconsax.calendar_1,
-              tooltip: 'Calendario',
-              onPressed: () {},
-            ),
-            const SizedBox(width: 8),
-            _TopBarButton(
-              icon: Iconsax.notification,
-              tooltip: 'Notificaciones',
-              badge: '3',
-              onPressed: () {},
-            ),
-            const SizedBox(width: 16),
+            Flexible(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _TopBarButton(
+                    icon: Iconsax.add,
+                    tooltip: 'Añadir',
+                    onPressed: () {},
+                  ),
+                  const SizedBox(width: 8),
+                  _TopBarButton(
+                    icon: Iconsax.calendar_1,
+                    tooltip: 'Calendario',
+                    onPressed: () {},
+                  ),
+                  const SizedBox(width: 8),
+                  _TopBarButton(
+                    icon: Iconsax.notification,
+                    tooltip: 'Notificaciones',
+                    badge: '3',
+                    onPressed: () {},
+                  ),
+                  const SizedBox(width: 16),
 
-            // Avatar de usuario
-            GestureDetector(
-              onTap: () {},
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary500, width: 2),
-                ),
-                child: const CircleAvatar(
-                  radius: 16,
-                  backgroundImage: AssetImage('Assets/Images/ProfileImage.png'),
-                ),
+                  // Avatar de usuario
+                  GestureDetector(
+                    onTap: () {},
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: AppColors.primary500, width: 2),
+                      ),
+                      child: const CircleAvatar(
+                        radius: 16,
+                        backgroundImage:
+                            AssetImage('Assets/Images/ProfileImage.png'),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -939,7 +954,7 @@ class _WelcomeHeader extends StatelessWidget {
                   children: [
                     Text('Hola, $doctorName', style: AppText.titleL),
                     const SizedBox(height: 4),
-                    Text('Sistema de administración veterinario.',
+                    Text('Bienvenido al sistema de administración veterinario.',
                         style: AppText.bodyM
                             .copyWith(color: AppColors.neutral500)),
                   ]),
@@ -1037,9 +1052,27 @@ class _ImportantSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      ImportantItem(title: 'Atendidos hoy', value: '18', icon: Iconsax.health),
-      ImportantItem(title: 'Pendientes', value: '7', icon: Iconsax.clock),
-      ImportantItem(title: 'Notas', value: '3', icon: Iconsax.note_2),
+      ImportantItem(
+        title: 'Atendidos hoy',
+        value: '18',
+        icon: Iconsax.health,
+        color: AppColors.success500,
+        backgroundColor: AppColors.success500.withOpacity(0.1),
+      ),
+      ImportantItem(
+        title: 'Pendientes',
+        value: '7',
+        icon: Iconsax.clock,
+        color: AppColors.warning500,
+        backgroundColor: AppColors.warning500.withOpacity(0.1),
+      ),
+      ImportantItem(
+        title: 'Notas',
+        value: '3',
+        icon: Iconsax.note_2,
+        color: AppColors.primary500,
+        backgroundColor: AppColors.primary500.withOpacity(0.1),
+      ),
     ];
 
     return Row(
@@ -1064,7 +1097,15 @@ class _ImportantSection extends StatelessWidget {
 class ImportantItem {
   final String title, value;
   final IconData icon;
-  ImportantItem({required this.title, required this.value, required this.icon});
+  final Color color;
+  final Color backgroundColor;
+  ImportantItem({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.backgroundColor,
+  });
 }
 
 class _ImportantCard extends StatelessWidget {
@@ -1085,9 +1126,9 @@ class _ImportantCard extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                  color: AppColors.primary500.withOpacity(.10),
+                  color: item.backgroundColor,
                   borderRadius: BorderRadius.circular(10)),
-              child: Icon(item.icon, size: 20, color: AppColors.primary600),
+              child: Icon(item.icon, size: 20, color: item.color),
             ),
             const SizedBox(width: 10),
             Expanded(
