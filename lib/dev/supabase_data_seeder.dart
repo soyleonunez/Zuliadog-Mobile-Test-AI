@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 class SupabaseDataSeeder {
   static const String _tablePatients = 'patients';
   static const String _tableRecords = 'medical_records';
-  static const String _tableAttachments = 'record_attachments';
 
   final SupabaseClient _supa = Supabase.instance.client;
 

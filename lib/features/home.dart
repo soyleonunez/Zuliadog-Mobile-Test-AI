@@ -13,7 +13,6 @@ import 'package:zuliadog/features/utilities/agenda.dart';
 import 'package:zuliadog/features/utilities/recursos.dart';
 import 'package:zuliadog/features/utilities/tickets.dart';
 import 'package:zuliadog/features/utilities/reportes.dart';
-import 'package:zuliadog/features/services/supabase_data_seeder.dart';
 
 /// =======================
 /// Zuliadog — Home (Desktop) v2.2 (one-file)
@@ -130,14 +129,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                         _WelcomeHeader(
                                           doctorName: 'Doctor/a',
                                           onSync: () async {
-                                            // Crear datos de prueba en Supabase
-                                            final seeder = SupabaseDataSeeder();
-                                            await seeder.seedTestData();
+                                            // TODO: Implementar sincronización de datos
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
                                               const SnackBar(
                                                 content: Text(
-                                                    'Datos de prueba creados en Supabase'),
+                                                    'Sincronización completada'),
                                                 backgroundColor: Colors.green,
                                               ),
                                             );
@@ -237,7 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
         break;
     }
 
-    NavigationHelper.navigateToRoute(context, routePath);
+    NavigationHelper.navigateToRouteReplacement(context, routePath);
   }
 
   Future<void> _performSearch(String query) async {

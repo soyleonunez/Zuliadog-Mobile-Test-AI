@@ -331,16 +331,7 @@ class _HistoriasPageState extends State<HistoriasPage> {
                   onSearchChanged: _searchPatients,
                   onPatientSelected: (patient) {
                     _searchController.clear();
-                    // Debug: mostrar qué datos se están recibiendo
-                    print('🔍 Paciente seleccionado:');
-                    print('  - patientId: ${patient.patientId}');
-                    print('  - historyNumber: ${patient.historyNumber}');
-                    print('  - patientName: ${patient.patientName}');
-
-                    // Usar el número de historia en lugar del UUID para buscar registros médicos
-                    final mrnToUse = patient.historyNumber ?? patient.patientId;
-                    print('🔍 MRN a usar: $mrnToUse');
-                    _onPatientSelected(mrnToUse);
+                    _onPatientSelected(patient.patientId);
                     setState(() {
                       _searchResults = [];
                     });

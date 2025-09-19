@@ -6,13 +6,12 @@ import 'package:pdfx/pdfx.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
 import '../../core/navigation.dart';
 import '../../features/data/storage_helper.dart';
 import '../../features/data/file_service.dart';
-import '../../features/widgets/file_viewer_dialog.dart';
+// import '../../features/widgets/file_viewer_dialog.dart'; // Archivo eliminado
 import '../menu.dart';
 
 // ======= Utils de tipo de documento =======
@@ -86,10 +85,26 @@ class _VisorPageState extends State<VisorPage> {
 
   Future<void> _bootstrap() async {
     try {
-      await _fetchDocs();
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      // Agregar timeout para evitar que se cuelgue
+      await _fetchDocs().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Timeout: La operación tardó demasiado');
+        },
+      );
     } catch (e) {
+      print('❌ Error en bootstrap del visor: $e');
       setState(() {
         _errorMessage = 'Error inicializando: $e';
+        _isLoading = false;
+      });
+    } finally {
+      setState(() {
         _isLoading = false;
       });
     }
@@ -111,7 +126,14 @@ class _VisorPageState extends State<VisorPage> {
         _isLoading = false;
       });
       if (_selectedIndex != null) {
-        await _loadPreviewFor(_docs[_selectedIndex!]);
+        try {
+          await _loadPreviewFor(_docs[_selectedIndex!]);
+        } catch (e) {
+          print('❌ Error al cargar preview: $e');
+          setState(() {
+            _errorMessage = 'Error al cargar preview: $e';
+          });
+        }
       }
     } catch (e) {
       setState(() {
@@ -140,11 +162,48 @@ class _VisorPageState extends State<VisorPage> {
       _docs[idx] = updatedDoc;
     }
 
-    // si es PDF, crea controlador
+    // si es PDF, crea controlador con manejo de errores
     final ext = d.name.split('.').last.toLowerCase();
     if (ext == 'pdf') {
-      _pdfController =
-          PdfControllerPinch(document: PdfDocument.openFile(local));
+      try {
+        // Verificar que el archivo local existe
+        final file = File(local);
+        if (!await file.exists()) {
+          throw Exception('El archivo PDF no existe localmente: $local');
+        }
+
+        // Verificar que el archivo no esté vacío
+        final fileSize = await file.length();
+        if (fileSize == 0) {
+          throw Exception('El archivo PDF está vacío');
+        }
+
+        print('📄 Intentando abrir PDF: $local (${fileSize} bytes)');
+
+        // Crear el controlador PDF con manejo de errores
+        _pdfController =
+            PdfControllerPinch(document: PdfDocument.openFile(local));
+
+        print('✅ PDF abierto exitosamente');
+      } catch (e) {
+        print('❌ Error al abrir PDF: $e');
+
+        // Limpiar el controlador si falla
+        _pdfController?.dispose();
+        _pdfController = null;
+
+        // Mostrar mensaje de error al usuario
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al abrir el archivo PDF: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
     }
     setState(() {});
   }
@@ -154,10 +213,12 @@ class _VisorPageState extends State<VisorPage> {
       final tempDir = await getTemporaryDirectory();
       final localPath = p.join(tempDir.path, filename);
 
+      print('📥 Descargando archivo: $url -> $localPath');
+
       final dio = Dio();
 
       // Configurar opciones para manejar errores 400
-      await dio.download(
+      final response = await dio.download(
         url,
         localPath,
         options: Options(
@@ -167,8 +228,28 @@ class _VisorPageState extends State<VisorPage> {
         ),
       );
 
+      // Verificar que la descarga fue exitosa
+      if (response.statusCode != 200) {
+        throw Exception('Error de descarga: ${response.statusCode}');
+      }
+
+      // Verificar que el archivo se creó y no está vacío
+      final file = File(localPath);
+      if (!await file.exists()) {
+        throw Exception('El archivo no se creó después de la descarga');
+      }
+
+      final fileSize = await file.length();
+      if (fileSize == 0) {
+        throw Exception('El archivo descargado está vacío');
+      }
+
+      print(
+          '✅ Archivo descargado exitosamente: $localPath (${fileSize} bytes)');
       return localPath;
     } catch (e) {
+      print('❌ Error al descargar archivo: $e');
+
       // Crear un archivo temporal vacío para evitar crashes
       final tempDir = await getTemporaryDirectory();
       final localPath = p.join(tempDir.path, 'error_$filename');
@@ -788,108 +869,6 @@ class _VisorPageState extends State<VisorPage> {
     );
   }
 
-  Widget _buildSimplePreview(DocItem item, DocKind kind) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.neutral200),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: colorForKind(kind).withOpacity(0.1),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(8),
-                topRight: Radius.circular(8),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(iconForKind(kind), color: colorForKind(kind), size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  'Vista previa de ${kind.name.toUpperCase()}',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: colorForKind(kind),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(iconForKind(kind), size: 48, color: colorForKind(kind)),
-                  const SizedBox(height: 12),
-                  Text(
-                    item.name,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.neutral900,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${kind.name.toUpperCase()} • ${_formatFileSize(item.name)}',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: AppTheme.neutral500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ======= Menú fila =======
-  void _showRowMenu(DocItem d) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.download),
-              title: const Text('Descargar'),
-              onTap: () async {
-                Navigator.pop(context);
-                await _loadPreviewFor(d);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Descargado: ${d.name}')),
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Asignar a paciente/record'),
-              onTap: () {
-                Navigator.pop(context);
-                _showAssignDialog(d);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ======= Asignar (mock simple: mueve de inbox a medical_records) =======
   Future<void> _showAssignDialog(DocItem d) async {
     // En producción muestra buscador de paciente y record reales.
@@ -1009,17 +988,22 @@ class _VisorPageState extends State<VisorPage> {
 
   Future<void> _openFile(DocItem item) async {
     try {
-      final fileType = item.name.split('.').last.toLowerCase();
-
       // Mostrar el visor de archivos en ventana emergente
-      await showDialog(
-        context: context,
-        builder: (context) => FileViewerDialog(
-          fileName: item.name,
-          fileUrl: item.url,
-          fileType: fileType,
+      // TODO: Implementar FileViewerDialog o usar alternativa
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Visor de archivos no disponible: ${item.name}'),
+          backgroundColor: Colors.orange,
         ),
       );
+      // await showDialog(
+      //   context: context,
+      //   builder: (context) => FileViewerDialog(
+      //     fileName: item.name,
+      //     fileUrl: item.url,
+      //     fileType: fileType,
+      //   ),
+      // );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1032,6 +1016,111 @@ class _VisorPageState extends State<VisorPage> {
     }
   }
 
+  // ignore: unused_element
+  Widget _buildSimplePreview(DocItem item, DocKind kind) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.neutral200),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colorForKind(kind).withOpacity(0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(iconForKind(kind), color: colorForKind(kind), size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  'Vista previa de ${kind.name.toUpperCase()}',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: colorForKind(kind),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(iconForKind(kind), size: 48, color: colorForKind(kind)),
+                  const SizedBox(height: 12),
+                  Text(
+                    item.name,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.neutral900,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${kind.name.toUpperCase()} • ${_formatFileSize(item.name)}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.neutral500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ======= Menú fila =======
+  // ignore: unused_element
+  void _showRowMenu(DocItem d) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Descargar'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _loadPreviewFor(d);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Descargado: ${d.name}')),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Asignar a paciente/record'),
+              onTap: () {
+                Navigator.pop(context);
+                _showAssignDialog(d);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ignore: unused_element
   Future<void> _shareFile(DocItem item) async {
     // TODO: Implementar compartir archivo
     if (context.mounted) {
@@ -1044,6 +1133,7 @@ class _VisorPageState extends State<VisorPage> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _editMetadata(DocItem item) async {
     final nameController = TextEditingController(text: item.name);
     final patientController = TextEditingController();
@@ -1094,6 +1184,7 @@ class _VisorPageState extends State<VisorPage> {
     );
   }
 
+  // ignore: unused_element
   Future<void> _deleteFile(DocItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1130,6 +1221,7 @@ class _VisorPageState extends State<VisorPage> {
   }
 
   // ======= Widgets auxiliares =======
+  // ignore: unused_element
   Widget _infoChip(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1148,6 +1240,7 @@ class _VisorPageState extends State<VisorPage> {
     );
   }
 
+  // ignore: unused_element
   Widget _infoRow(String label, String value, {bool isUrl = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1181,6 +1274,7 @@ class _VisorPageState extends State<VisorPage> {
     );
   }
 
+  // ignore: unused_element
   Widget _actionButton({
     required IconData icon,
     required String label,

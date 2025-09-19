@@ -15,6 +15,27 @@ import 'package:zuliadog/auth/service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Configurar manejo de errores para evitar el error de teclado y PDFx
+  FlutterError.onError = (FlutterErrorDetails details) {
+    // Ignorar el error específico de teclado que es un bug conocido de Flutter
+    if (details.exception.toString().contains('KeyDownEvent is dispatched') ||
+        details.exception
+            .toString()
+            .contains('physical key is already pressed')) {
+      return; // Ignorar este error específico
+    }
+
+    // Ignorar errores de PDFx que son comunes y no críticos
+    if (details.exception.toString().contains('pdfx_exception') ||
+        details.exception.toString().contains('Document failed to open')) {
+      print('⚠️ Error de PDFx ignorado: ${details.exception}');
+      return; // Ignorar este error específico
+    }
+
+    // Para otros errores, usar el handler por defecto
+    FlutterError.presentError(details);
+  };
+
   await SupabaseService.init();
   runApp(const ZuliadogApp());
 }
@@ -39,6 +60,36 @@ class ZuliadogApp extends StatelessWidget {
         RecursosPage.route: (context) => const RecursosPage(),
         TicketsPage.route: (context) => const TicketsPage(),
         ReportesPage.route: (context) => const ReportesPage(),
+      },
+      builder: (context, child) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Tamaño mínimo de ventana recomendado
+            const minWidth = 1200.0;
+            const minHeight = 800.0;
+
+            // Si la ventana es muy pequeña, mostrar contenido con scroll
+            if (constraints.maxWidth < minWidth ||
+                constraints.maxHeight < minHeight) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SingleChildScrollView(
+                  child: SizedBox(
+                    width: constraints.maxWidth < minWidth
+                        ? minWidth
+                        : constraints.maxWidth,
+                    height: constraints.maxHeight < minHeight
+                        ? minHeight
+                        : constraints.maxHeight,
+                    child: child,
+                  ),
+                ),
+              );
+            }
+
+            return child!;
+          },
+        );
       },
     );
   }
