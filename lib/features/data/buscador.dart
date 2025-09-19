@@ -51,7 +51,7 @@ class PatientSearchRow {
   }
 }
 
-class _SearchRepository {
+class SearchRepository {
   final SupabaseClient _db = Supabase.instance.client;
 
   /// Busca por MRN exacto, MRN numérico, nombre de paciente o nombre de dueño.
@@ -100,7 +100,7 @@ class BuscadorPage extends StatefulWidget {
 
 class _BuscadorPageState extends State<BuscadorPage> {
   final _controller = TextEditingController();
-  final _repo = _SearchRepository();
+  final _repo = SearchRepository();
   Timer? _debounce;
   bool _loading = false;
   List<PatientSearchRow> _items = [];

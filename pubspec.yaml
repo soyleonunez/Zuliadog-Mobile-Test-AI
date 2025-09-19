@@ -32,6 +32,7 @@ dependencies:
 
   # --- Archivos y documentos ---
   file_picker: ^10.3.3          # si prefieres, deja ^6.1.1
+  url_launcher: ^6.3.1
   excel: ^4.0.6
   image: ^4.1.7
   pdf: ^3.10.1
