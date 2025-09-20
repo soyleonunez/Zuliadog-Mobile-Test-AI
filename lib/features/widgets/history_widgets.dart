@@ -433,73 +433,64 @@ class _NoPatientSelectedViewState extends State<NoPatientSelectedView> {
   Widget _buildQuickActionsRow() {
     return Row(
       children: [
-        _QuickActionButton(
-          icon: Iconsax.add_circle,
-          label: 'Nueva Historia',
-          color: const Color(0xFF4F46E5),
-          onPressed: () {
-            // TODO: Implementar nueva historia
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Nueva Historia (pendiente)')),
-            );
-          },
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () {
+              // TODO: Implementar nueva historia
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Nueva Historia (pendiente)')),
+              );
+            },
+            icon: const Icon(Iconsax.add_circle, size: 18),
+            label: const Text('Nueva Historia', style: TextStyle(fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5).withOpacity(0.1),
+              foregroundColor: const Color(0xFF4F46E5),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
         ),
         const SizedBox(width: 8),
-        _QuickActionButton(
-          icon: Iconsax.pet,
-          label: 'Crear Camada',
-          color: Colors.orange,
-          onPressed: () {
-            // TODO: Implementar crear camada
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Crear Camada (pendiente)')),
-            );
-          },
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () {
+              // TODO: Implementar crear camada
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Crear Camada (pendiente)')),
+              );
+            },
+            icon: const Icon(Iconsax.pet, size: 18),
+            label: const Text('Crear Camada', style: TextStyle(fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.withOpacity(0.1),
+              foregroundColor: Colors.orange,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
         ),
         const SizedBox(width: 8),
-        _QuickActionButton(
-          icon: Iconsax.edit,
-          label: 'Editar Paciente',
-          color: Colors.blue,
-          onPressed: () {
-            // TODO: Implementar editar paciente
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Editar Paciente (pendiente)')),
-            );
-          },
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () {
+              // TODO: Implementar editar paciente
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Editar Paciente (pendiente)')),
+              );
+            },
+            icon: const Icon(Iconsax.edit, size: 18),
+            label:
+                const Text('Editar Paciente', style: TextStyle(fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.withOpacity(0.1),
+              foregroundColor: Colors.blue,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
         ),
       ],
-    );
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onPressed;
-
-  const _QuickActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color.withValues(alpha: 0.1),
-          foregroundColor: color,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-        ),
-      ),
     );
   }
 }
