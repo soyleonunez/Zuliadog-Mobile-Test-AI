@@ -36,20 +36,14 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   void initState() {
     super.initState();
     _currentMrn = widget.mrn;
-    print('🔍 OptimizedHistoriasPage initState:');
-    print('  - widget.mrn: ${widget.mrn}');
-    print('  - _currentMrn: $_currentMrn');
     _loadData();
   }
 
   void _loadData() {
-    print('🔍 _loadData: _currentMrn = $_currentMrn');
     if (_currentMrn != null) {
-      print('🔍 _loadData: Cargando datos para MRN: $_currentMrn');
       _future = _fetchHistories();
       _patientFuture = _fetchPatient();
     } else {
-      print('🔍 _loadData: No hay MRN, inicializando con datos vacíos');
       _future = Future.value([]);
       _patientFuture = Future.value(null);
     }
@@ -76,49 +70,22 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 
   Future<Map<String, dynamic>?> _fetchPatient() async {
     if (_currentMrn == null) {
-      print('🔍 _fetchPatient: _currentMrn es null');
       return null;
     }
 
-    print('🔍 _fetchPatient: Buscando paciente con MRN: $_currentMrn');
-
     try {
-      // Buscar por MRN (mrn) en la tabla patients
-      print(
-          '🔍 _fetchPatient: Buscando en tabla patients con mrn = $_currentMrn');
-
       final rows = await _supa
           .from('patients')
           .select('id,name,species,breed,sex,birth_date,mrn')
           .eq('mrn', _currentMrn!)
           .limit(1);
 
-      print('🔍 _fetchPatient: Resultados encontrados: ${rows.length}');
-
-      // Si no encontramos nada, vamos a ver qué MRNs existen en la tabla
-      if (rows.isEmpty) {
-        print(
-            '🔍 _fetchPatient: No se encontró paciente con MRN: $_currentMrn');
-        print('🔍 _fetchPatient: Verificando qué MRNs existen en la tabla...');
-
-        final allPatients = await _supa
-            .from('patients')
-            .select('id,name,history_number')
-            .limit(5);
-
-        print('🔍 _fetchPatient: Primeros 5 pacientes en la tabla:');
-        for (var patient in allPatients) {
-          print(
-              '  - ID: ${patient['id']}, Name: ${patient['name']}, history_number: ${patient['history_number']}');
-        }
-      } else {
-        print('🔍 _fetchPatient: Datos del paciente: ${rows.first}');
+      if (rows.isNotEmpty) {
         return Map<String, dynamic>.from(rows.first);
       }
 
       return null;
     } catch (e) {
-      print('🔍 Error al cargar paciente: $e');
       return null;
     }
   }
@@ -151,7 +118,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         return '$age ${age == 1 ? 'año' : 'años'}';
       }
     } catch (e) {
-      print('Error al calcular edad: $e');
       return 'Fecha inválida';
     }
   }
@@ -165,24 +131,18 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       return;
     }
 
-    print('🔍 Iniciando búsqueda con query: "$query"');
     setState(() {
       _isSearching = true;
     });
 
     try {
       final results = await _searchRepository.search(query, limit: 10);
-      print('🔍 Resultados encontrados: ${results.length}');
-      for (var result in results) {
-        print('  - ${result.patientName} (MRN: ${result.historyNumber})');
-      }
 
       setState(() {
         _searchResults = results;
         _isSearching = false;
       });
     } catch (e) {
-      print('❌ Error en búsqueda: $e');
       if (mounted) {
         NotificationService.showError('Error al buscar pacientes: $e');
       }
@@ -193,51 +153,73 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     }
   }
 
-  void _openHistoryEditor({Map<String, dynamic>? record}) async {
-    // Si no hay paciente seleccionado, crear uno nuevo primero
+  void _openHistoryEditor({Map<String, dynamic>? record}) {
+    // Verificar que hay un paciente seleccionado
     if (_currentMrn == null) {
-      final newPatient = await _createNewPatient();
-      if (newPatient == null) return; // Usuario canceló
+      NotificationService.showWarning('Primero selecciona un paciente');
+      return;
     }
 
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      builder: (_) => _HistoryEditor(
-        clinicId: widget.clinicId,
-        mrn: _currentMrn!,
-        record: record,
-      ),
-    );
-    if (saved == true) {
-      setState(() {
-        _future = _fetchHistories();
+    try {
+      showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.white,
+        builder: (BuildContext context) => _HistoryEditor(
+          clinicId: widget.clinicId,
+          mrn: _currentMrn!,
+          record: record,
+        ),
+      ).then((saved) {
+        if (mounted && saved == true) {
+          setState(() {
+            _future = _fetchHistories();
+          });
+          NotificationService.showSuccess(
+              'Bloque de historia creado correctamente');
+        }
+      }).catchError((error) {
+        if (mounted) {
+          NotificationService.showError('Error al abrir el editor: $error');
+        }
       });
+    } catch (e) {
+      if (mounted) {
+        NotificationService.showError('Error al abrir el editor: $e');
+      }
     }
   }
 
-  Future<Map<String, dynamic>?> _createNewPatient() async {
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      builder: (_) => _NewPatientForm(
-        clinicId: widget.clinicId,
-      ),
-    );
-
-    if (result != null) {
-      // Actualizar la lista de pacientes y seleccionar el nuevo
-      setState(() {
-        _currentMrn = result['mrn'];
-        _loadData();
+  void _createNewPatient() {
+    try {
+      showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.white,
+        builder: (BuildContext context) => _NewPatientForm(
+          clinicId: widget.clinicId,
+        ),
+      ).then((result) {
+        if (mounted && result != null) {
+          // Actualizar la lista de pacientes y seleccionar el nuevo
+          setState(() {
+            _currentMrn = result['mrn'];
+            _loadData();
+          });
+          NotificationService.showSuccess('Paciente creado correctamente');
+        }
+      }).catchError((error) {
+        if (mounted) {
+          NotificationService.showError('Error al crear paciente: $error');
+        }
       });
+    } catch (e) {
+      if (mounted) {
+        NotificationService.showError('Error al crear paciente: $e');
+      }
     }
-
-    return result;
   }
 
   void _createLitter() {
@@ -254,42 +236,39 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     );
   }
 
-  Widget _buildCompactActionButton({
-    required IconData icon,
-    required String tooltip,
-    required Color color,
-    VoidCallback? onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: onTap != null
-                  ? color.withValues(alpha: .1)
-                  : const Color(0xFFE5E7EB).withValues(alpha: .5),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: onTap != null
-                    ? color.withValues(alpha: .3)
-                    : const Color(0xFF6B7280).withValues(alpha: .3),
-              ),
-            ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: onTap != null ? color : const Color(0xFF6B7280),
+  void _editPatient() {
+    // TODO: Implementar edición de paciente
+    NotificationService.showInfo('Editar Paciente (pendiente)');
+  }
+
+  Widget _buildPatientInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF6B7280),
             ),
           ),
-        ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  void _selectBreedImage() {
+    // TODO: Implementar selección de imagen de breeds
+    NotificationService.showInfo('Seleccionar Imagen de Raza (pendiente)');
   }
 
   Widget _buildSearchResultItem(PatientSearchRow patient) {
@@ -301,13 +280,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 
     return InkWell(
       onTap: () {
-        print('🔍 Paciente seleccionado:');
-        print('  - patientId: ${patient.patientId}');
-        print('  - historyNumber: ${patient.historyNumber}');
-        print('  - mrnInt: ${patient.mrnInt}');
-        print('  - patientName: ${patient.patientName}');
-        print('  - MRN a usar: $mrn');
-
         setState(() {
           _currentMrn = mrn;
           _searchResults = [];
@@ -382,19 +354,197 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.neutral50,
-      body: Row(
+      body: Column(
         children: [
-          // Columna izquierda: Historias Médicas (70%)
+          // Topbar para toda la ventana
+          _buildTopBar(),
+          // Contenido principal
           Expanded(
-            flex: 7,
-            child: _buildHistoriesColumn(),
-          ),
-          // Columna derecha: Ficha del Paciente (30%)
-          Expanded(
-            flex: 3,
-            child: _buildPatientPanel(),
+            child: Row(
+              children: [
+                // Columna izquierda: Historias Médicas (70%)
+                Expanded(
+                  flex: 7,
+                  child: _buildHistoriesColumn(),
+                ),
+                // Columna derecha: Ficha del Paciente (30%)
+                Expanded(
+                  flex: 3,
+                  child: _buildPatientPanel(),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Título
+          Text(
+            'Historias Médicas',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          const SizedBox(width: 24),
+          // Barra de búsqueda
+          Expanded(
+            child: Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _searchPatients,
+                decoration: InputDecoration(
+                  hintText: 'Buscar por MRN o nombre de mascota...',
+                  hintStyle: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 14,
+                  ),
+                  prefixIcon: _isSearching
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF4F46E5)),
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Iconsax.search_normal,
+                          color: Color(0xFF6B7280),
+                          size: 18,
+                        ),
+                  suffixIcon: _currentMrn != null
+                      ? IconButton(
+                          onPressed: () => _exportHistory(),
+                          icon: const Icon(
+                            Iconsax.export_2,
+                            color: Color(0xFF6B7280),
+                            size: 18,
+                          ),
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Botones de acción con diseño quick actions
+          // 1. Nuevo Bloque (solo icono)
+          _buildQuickActionButton(
+            icon: Iconsax.add_square,
+            tooltip: 'Nuevo Bloque',
+            color: const Color(0xFF16A34A),
+            onTap: _currentMrn == null ? null : () => _openHistoryEditor(),
+          ),
+          const SizedBox(width: 8),
+          // 2. Nueva Historia (icono + texto)
+          _buildQuickActionButton(
+            icon: Iconsax.user_add,
+            text: 'Nueva Historia',
+            tooltip: 'Crear Nuevo Paciente',
+            color: const Color(0xFF4F46E5),
+            onTap: () => _createNewPatient(),
+          ),
+          const SizedBox(width: 8),
+          // 3. Crear Camada (icono + texto)
+          _buildQuickActionButton(
+            icon: Iconsax.pet,
+            text: 'Camada',
+            tooltip: 'Crear Camada',
+            color: Colors.orange,
+            onTap: _currentMrn == null ? null : () => _createLitter(),
+          ),
+          const SizedBox(width: 8),
+          // 4. Editar Paciente (icono + texto)
+          _buildQuickActionButton(
+            icon: Iconsax.edit,
+            text: 'Editar',
+            tooltip: 'Editar Paciente',
+            color: const Color(0xFF4F46E5),
+            onTap: () => _editPatient(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    String? text,
+    required String tooltip,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: onTap != null
+                  ? color.withValues(alpha: .1)
+                  : const Color(0xFFE5E7EB).withValues(alpha: .5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: onTap != null
+                    ? color.withValues(alpha: .3)
+                    : const Color(0xFF6B7280).withValues(alpha: .3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: onTap != null ? color : const Color(0xFF6B7280),
+                ),
+                if (text != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: onTap != null ? color : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -404,98 +554,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       color: const Color(0xFFF8F9FA), // background-light
       child: Column(
         children: [
-          // Header compacto con búsqueda integrada
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
-              ),
-            ),
-            child: Row(
-              children: [
-                // Título
-                Text(
-                  'Historias Médicas',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937),
-                  ),
-                ),
-                const SizedBox(width: 24),
-                // Barra de búsqueda integrada
-                Expanded(
-                  child: Container(
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _searchPatients,
-                      decoration: InputDecoration(
-                        hintText: 'Buscar por MRN o nombre de mascota...',
-                        hintStyle: const TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 14,
-                        ),
-                        prefixIcon: _isSearching
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        Color(0xFF4F46E5)),
-                                  ),
-                                ),
-                              )
-                            : const Icon(
-                                Iconsax.search_normal,
-                                color: Color(0xFF6B7280),
-                                size: 18,
-                              ),
-                        suffixIcon: _currentMrn != null
-                            ? IconButton(
-                                onPressed: () => _exportHistory(),
-                                icon: const Icon(
-                                  Iconsax.export_2,
-                                  color: Color(0xFF6B7280),
-                                  size: 18,
-                                ),
-                              )
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Botones de acción compactos
-                _buildCompactActionButton(
-                  icon: Iconsax.add,
-                  tooltip: 'Nueva Historia',
-                  color: const Color(0xFF4F46E5),
-                  onTap: () => _openHistoryEditor(),
-                ),
-                const SizedBox(width: 8),
-                _buildCompactActionButton(
-                  icon: Iconsax.pet,
-                  tooltip: 'Crear Camada',
-                  color: Colors.orange,
-                  onTap: _currentMrn == null ? null : () => _createLitter(),
-                ),
-              ],
-            ),
-          ),
           // Resultados de búsqueda
           if (_searchResults.isNotEmpty)
             Container(
@@ -661,28 +719,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       color: Colors.white, // bg-card-light
       child: Column(
         children: [
-          // Header del panel
-          Container(
-            padding: const EdgeInsets.all(24), // p-6
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                  bottom: BorderSide(
-                      color: Color(0xFFE5E7EB), width: 1)), // border-light
-            ),
-            child: Row(
-              children: [
-                const Text(
-                  'Ficha del Paciente',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937), // text-light
-                  ),
-                ),
-              ],
-            ),
-          ),
           // Contenido del panel
           Expanded(
             child: _currentMrn == null
@@ -717,115 +753,88 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Foto del paciente y nombre
-                            Row(
-                              children: [
-                                Container(
-                                  width: 64, // w-16
-                                  height: 64, // h-16
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: const Color(0xFF4F46E5)
-                                        .withValues(alpha: 0.1),
-                                    border: Border.all(
-                                        color: const Color(0xFF4F46E5),
-                                        width: 2),
-                                  ),
-                                  child: const Icon(Iconsax.pet,
-                                      size: 32, color: Color(0xFF4F46E5)),
-                                ),
-                                const SizedBox(width: 16), // gap-4
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        patient['name'] ?? 'Sin nombre',
-                                        style: const TextStyle(
-                                          fontSize: 20, // text-xl
-                                          fontWeight: FontWeight.bold,
-                                          color:
-                                              Color(0xFF1F2937), // text-light
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'MRN: ${patient['mrn']?.toString().padLeft(6, '0') ?? _currentMrn!.padLeft(6, '0')}',
-                                        style: const TextStyle(
-                                          fontSize: 12, // text-sm
-                                          color: Color(
-                                              0xFF6B7280), // text-muted-light
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 32), // mb-8
-                            // Información básica en grid 2x2
+                            // Información del paciente
                             Container(
                               padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8F9FA),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
                               child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
-                                      Expanded(
-                                        child: _buildInfoRow(
-                                            'Especie',
-                                            patient['species'] ??
-                                                'No especificada'),
+                                      // Círculo para seleccionar imagen
+                                      GestureDetector(
+                                        onTap: () => _selectBreedImage(),
+                                        child: Container(
+                                          width: 64,
+                                          height: 64,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: const Color(0xFF4F46E5)
+                                                .withValues(alpha: 0.1),
+                                            border: Border.all(
+                                                color: const Color(0xFF4F46E5),
+                                                width: 2),
+                                          ),
+                                          child: const Icon(Iconsax.pet,
+                                              size: 32,
+                                              color: Color(0xFF4F46E5)),
+                                        ),
                                       ),
+                                      const SizedBox(width: 16),
                                       Expanded(
-                                        child: _buildInfoRow(
-                                            'Raza',
-                                            patient['breed'] ??
-                                                'No especificada'),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              patient['name'] ?? 'Sin nombre',
+                                              style: const TextStyle(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF1F2937),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'MRN: ${patient['mrn']?.toString().padLeft(6, '0') ?? _currentMrn!.padLeft(6, '0')}',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                color: Color(0xFF6B7280),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 16),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: _buildInfoRow(
-                                            'Sexo',
-                                            patient['sex'] ??
-                                                'No especificado'),
-                                      ),
-                                      Expanded(
-                                        child: _buildInfoRow(
-                                            'Edad',
-                                            _calculateAge(patient['birth_date']
-                                                ?.toString())),
-                                      ),
-                                    ],
-                                  ),
+                                  // Información básica en dos filas
+                                  _buildPatientInfoRow('Especie',
+                                      patient['species'] ?? 'No especificada'),
+                                  _buildPatientInfoRow('Raza',
+                                      patient['breed'] ?? 'No especificada'),
+                                  _buildPatientInfoRow('Sexo',
+                                      patient['sex'] ?? 'No especificado'),
+                                  _buildPatientInfoRow(
+                                      'Edad',
+                                      _calculateAge(
+                                          patient['birth_date']?.toString())),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 32), // mb-8
+                            const SizedBox(height: 16),
                             // Signos vitales
                             const Text(
                               'Signos Vitales',
                               style: TextStyle(
-                                fontSize: 16, // text-md
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF1F2937), // text-light
+                                color: Color(0xFF1F2937),
                               ),
                             ),
-                            const SizedBox(height: 16), // mb-4
+                            const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8F9FA),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
                               child: Column(
                                 children: [
                                   _buildVitalSign('Temperatura', '38.5 °C'),
@@ -866,51 +875,26 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12, // text-sm
-            color: Color(0xFF6B7280), // text-muted-light
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 12, // text-sm
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF1F2937), // text-light
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildVitalSign(String label, String value, {bool isNormal = false}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
             style: const TextStyle(
-              fontSize: 12, // text-sm
-              color: Color(0xFF6B7280), // text-muted-light
+              fontSize: 14,
+              color: Color(0xFF6B7280),
             ),
           ),
           Text(
             value,
             style: TextStyle(
-              fontSize: 12, // text-sm
-              fontWeight: FontWeight.w500,
-              color: isNormal
-                  ? const Color(0xFF16A34A)
-                  : const Color(0xFF1F2937), // green-600 : text-light
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color:
+                  isNormal ? const Color(0xFF16A34A) : const Color(0xFF1F2937),
             ),
           ),
         ],
@@ -997,8 +981,6 @@ class _HistoryBlockState extends State<_HistoryBlock> {
     _initializeControllers();
     // Por defecto bloqueado ya que no hay campo locked en la BD
     _isLocked = true;
-    print(
-        '🔍 _HistoryBlock initState: _isLocked = $_isLocked (por defecto bloqueado)');
   }
 
   void _initializeControllers() {
@@ -1021,26 +1003,17 @@ class _HistoryBlockState extends State<_HistoryBlock> {
 
     // Inicializar controlador para content_delta (acotaciones)
     final contentDeltaText = widget.data['content_delta']?.toString() ?? '';
-    print('🔍 Inicializando controladores:');
-    print('  - summary: "${widget.data['summary']?.toString() ?? ''}"');
-    print('  - content_delta: "$contentDeltaText"');
-    print('  - title: "${widget.data['title']?.toString() ?? ''}"');
     List<dynamic> contentDelta;
     if (contentDeltaText.isNotEmpty) {
       try {
         // Intentar parsear como JSON primero
         contentDelta = jsonDecode(contentDeltaText) as List;
-        print('  - content_delta parseado como JSON: $contentDelta');
         if (contentDelta.isEmpty) {
-          print(
-              '  - content_delta vacío después del parse, usando valor por defecto');
           contentDelta = [
             {'insert': '\n'}
           ];
         }
       } catch (e) {
-        print(
-            '  - content_delta no es JSON válido, tratando como texto plano: $e');
         // Si no es JSON válido, tratarlo como texto plano
         contentDelta = [
           {
@@ -1049,10 +1022,8 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                 : '$contentDeltaText\n'
           }
         ];
-        print('  - content_delta convertido a formato delta: $contentDelta');
       }
     } else {
-      print('  - content_delta vacío, usando valor por defecto');
       contentDelta = [
         {'insert': '\n'}
       ];
@@ -1066,11 +1037,6 @@ class _HistoryBlockState extends State<_HistoryBlock> {
     _titleController = TextEditingController(
       text: widget.data['title']?.toString() ?? 'Consulta de seguimiento',
     );
-
-    print(
-        '  - Contenido final summary: "${_summaryController.document.toPlainText()}"');
-    print(
-        '  - Contenido final content_delta: "${_contentDeltaController.document.toPlainText()}"');
   }
 
   @override
@@ -1107,7 +1073,6 @@ class _HistoryBlockState extends State<_HistoryBlock> {
         );
       }
     } catch (e) {
-      print('Error al cambiar estado de bloqueo: $e');
       if (mounted) {
         NotificationService.showError('Error al cambiar el estado de bloqueo');
       }
@@ -1117,6 +1082,7 @@ class _HistoryBlockState extends State<_HistoryBlock> {
   Future<void> _save() async {
     try {
       // Guardar el contenido del summary, content_delta y title
+      // Actualizar la fecha de modificación
       await _supa.from('medical_records').update({
         'title': _titleController.text.trim().isEmpty
             ? null
@@ -1126,6 +1092,7 @@ class _HistoryBlockState extends State<_HistoryBlock> {
             : _summaryController.document.toPlainText().trim(),
         'content_delta':
             jsonEncode(_contentDeltaController.document.toDelta().toJson()),
+        'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', widget.data['id']);
 
       setState(() {
@@ -1137,9 +1104,88 @@ class _HistoryBlockState extends State<_HistoryBlock> {
         NotificationService.showSuccess('Historia guardada correctamente');
       }
     } catch (e) {
-      print('Error al guardar historia: $e');
       if (mounted) {
         NotificationService.showError('Error al guardar la historia');
+      }
+    }
+  }
+
+  Widget _buildBlockActionButton({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: color.withValues(alpha: .3),
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 16,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _deleteBlock() {
+    // Mostrar diálogo de confirmación
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Eliminar Bloque'),
+          content: const Text(
+              '¿Estás seguro de que quieres eliminar este bloque de historia? Esta acción no se puede deshacer.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _performDelete();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFDC2626),
+              ),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _performDelete() async {
+    try {
+      await _supa.from('medical_records').delete().eq('id', widget.data['id']);
+
+      if (mounted) {
+        NotificationService.showSuccess('Bloque eliminado correctamente');
+        // Recargar la página principal
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        NotificationService.showError('Error al eliminar el bloque: $e');
       }
     }
   }
@@ -1200,53 +1246,69 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                     ],
                   ),
                 ),
-                // Badge de estado clickeable
-                Tooltip(
-                  message: _isLocked
-                      ? 'Hacer clic para desbloquear y editar'
-                      : 'Hacer clic para bloquear',
-                  child: GestureDetector(
-                    onTap: _toggleLock,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _isLocked
-                            ? const Color(0xFFFEE2E2) // red-100
-                            : const Color(0xFFDCFCE7), // green-100
-                        borderRadius: BorderRadius.circular(20), // rounded-full
-                        border: Border.all(
-                          color: _isLocked
-                              ? const Color(0xFFDC2626).withValues(alpha: 0.3)
-                              : const Color(0xFF16A34A).withValues(alpha: 0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _isLocked ? Iconsax.lock : Iconsax.unlock,
-                            size: 12,
+                // Badge de estado y botones de acción
+                Row(
+                  children: [
+                    // Badge de estado clickeable
+                    Tooltip(
+                      message: _isLocked
+                          ? 'Hacer clic para desbloquear y editar'
+                          : 'Hacer clic para bloquear',
+                      child: GestureDetector(
+                        onTap: _toggleLock,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
                             color: _isLocked
-                                ? const Color(0xFFDC2626) // red-700
-                                : const Color(0xFF16A34A), // green-700
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isLocked ? 'Bloqueado' : 'Editable',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                                ? const Color(0xFFFEE2E2) // red-100
+                                : const Color(0xFFDCFCE7), // green-100
+                            borderRadius:
+                                BorderRadius.circular(20), // rounded-full
+                            border: Border.all(
                               color: _isLocked
-                                  ? const Color(0xFFDC2626) // red-700
-                                  : const Color(0xFF16A34A), // green-700
+                                  ? const Color(0xFFDC2626)
+                                      .withValues(alpha: 0.3)
+                                  : const Color(0xFF16A34A)
+                                      .withValues(alpha: 0.3),
+                              width: 1,
                             ),
                           ),
-                        ],
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _isLocked ? Iconsax.lock : Iconsax.unlock,
+                                size: 12,
+                                color: _isLocked
+                                    ? const Color(0xFFDC2626) // red-700
+                                    : const Color(0xFF16A34A), // green-700
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _isLocked ? 'Bloqueado' : 'Editable',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _isLocked
+                                      ? const Color(0xFFDC2626) // red-700
+                                      : const Color(0xFF16A34A), // green-700
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    // Botón para eliminar bloque
+                    _buildBlockActionButton(
+                      icon: Iconsax.trash,
+                      tooltip: 'Eliminar Bloque',
+                      color: const Color(0xFFDC2626),
+                      onTap: () => _deleteBlock(),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1348,7 +1410,9 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    height: 32, // Altura más pequeña
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       border: Border.all(color: const Color(0xFFE5E7EB)),
                       borderRadius: BorderRadius.circular(8),
@@ -1589,66 +1653,88 @@ class _HistoryEditorState extends State<_HistoryEditor> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: ListView(children: [
-          // Campos de entrada
-          Row(children: [
+        child: Column(
+          children: [
+            // Campos de entrada
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _titleCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Título',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _dept,
+                    decoration: const InputDecoration(
+                      labelText: 'Departamento',
+                    ),
+                    items: const ['MED', 'DERM', 'CIR', 'LAB']
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _dept = v ?? 'MED'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Switch personalizado en lugar de SwitchListTile
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Switch(
+                        value: _locked,
+                        onChanged: (v) => setState(() => _locked = v),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('Bloquear'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _dxCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Diagnóstico',
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Editor Quill
+            QuillSimpleToolbar(
+              controller: _controller,
+            ),
+
+            const SizedBox(height: 8),
+
             Expanded(
-              child: TextField(
-                controller: _titleCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Título',
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppTheme.neutral200),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: QuillEditor.basic(
+                  controller: _controller,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            DropdownButtonFormField<String>(
-              value: _dept,
-              decoration: const InputDecoration(
-                labelText: 'Departamento',
-              ),
-              items: const ['MED', 'DERM', 'CIR', 'LAB']
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                  .toList(),
-              onChanged: (v) => setState(() => _dept = v ?? 'MED'),
-            ),
-            const SizedBox(width: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Bloquear'),
-              value: _locked,
-              onChanged: (v) => setState(() => _locked = v),
-            ),
-          ]),
-
-          const SizedBox(height: 12),
-
-          TextField(
-            controller: _dxCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Diagnóstico',
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Editor Quill
-          QuillSimpleToolbar(
-            controller: _controller,
-          ),
-
-          const SizedBox(height: 8),
-
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppTheme.neutral200),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: QuillEditor.basic(
-              controller: _controller,
-            ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }

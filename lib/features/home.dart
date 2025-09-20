@@ -5,7 +5,6 @@ import 'package:zuliadog/features/data/buscador.dart';
 import 'package:zuliadog/features/data/repository.dart';
 import 'package:zuliadog/features/menu.dart';
 import 'package:zuliadog/features/utilities/visor.dart';
-import 'package:zuliadog/features/utilities/pacientes.dart';
 import 'package:zuliadog/features/utilities/historias.dart';
 import 'package:zuliadog/features/utilities/recetas.dart';
 import 'package:zuliadog/features/utilities/laboratorio.dart';
@@ -206,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String routePath = '/home'; // fallback
     switch (route) {
       case 'frame_pacientes':
-        routePath = PacientesPage.route;
+        routePath = '/pacientes';
         break;
       case 'frame_historias':
         routePath = HistoriasPage.route;

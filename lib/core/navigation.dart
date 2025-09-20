@@ -25,7 +25,8 @@ class NavigationHelper {
               page = const HomeScreen();
               break;
             case '/pacientes':
-              page = const PacientesPage();
+              page = PatientsPage(
+                  clinicId: '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203');
               break;
             case '/historias':
               page = const HistoriasPage();
@@ -74,7 +75,8 @@ class NavigationHelper {
               page = const HomeScreen();
               break;
             case '/pacientes':
-              page = const PacientesPage();
+              page = PatientsPage(
+                  clinicId: '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203');
               break;
             case '/historias':
               page = const HistoriasPage();
