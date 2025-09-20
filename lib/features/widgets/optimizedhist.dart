@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:zuliadog/core/theme.dart';
+import 'package:zuliadog/core/notifications.dart';
 import 'package:zuliadog/features/data/buscador.dart';
 
 final _supa = Supabase.instance.client;
@@ -164,18 +165,27 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       return;
     }
 
+    print('🔍 Iniciando búsqueda con query: "$query"');
     setState(() {
       _isSearching = true;
     });
 
     try {
       final results = await _searchRepository.search(query, limit: 10);
+      print('🔍 Resultados encontrados: ${results.length}');
+      for (var result in results) {
+        print('  - ${result.patientName} (MRN: ${result.historyNumber})');
+      }
+
       setState(() {
         _searchResults = results;
         _isSearching = false;
       });
     } catch (e) {
-      print('Error en búsqueda: $e');
+      print('❌ Error en búsqueda: $e');
+      if (mounted) {
+        NotificationService.showError('Error al buscar pacientes: $e');
+      }
       setState(() {
         _searchResults = [];
         _isSearching = false;
@@ -244,48 +254,38 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     );
   }
 
-  Widget _buildQuickActionButton({
+  Widget _buildCompactActionButton({
     required IconData icon,
-    required String label,
+    required String tooltip,
     required Color color,
     VoidCallback? onTap,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: onTap != null
-                ? color.withOpacity(.08)
-                : const Color(0xFFE5E7EB).withOpacity(.5),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
               color: onTap != null
-                  ? color.withOpacity(.2)
-                  : const Color(0xFF6B7280).withOpacity(.3),
+                  ? color.withValues(alpha: .1)
+                  : const Color(0xFFE5E7EB).withValues(alpha: .5),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: onTap != null
+                    ? color.withValues(alpha: .3)
+                    : const Color(0xFF6B7280).withValues(alpha: .3),
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 14,
-                color: onTap != null ? color : const Color(0xFF6B7280),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: onTap != null ? color : const Color(0xFF6B7280),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                ),
-              ),
-            ],
+            child: Icon(
+              icon,
+              size: 18,
+              color: onTap != null ? color : const Color(0xFF6B7280),
+            ),
           ),
         ),
       ),
@@ -325,7 +325,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor: AppTheme.primary500.withOpacity(0.1),
+              backgroundColor: AppTheme.primary500.withValues(alpha: 0.1),
               child: Icon(
                 Iconsax.pet,
                 color: AppTheme.primary500,
@@ -404,100 +404,94 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       color: const Color(0xFFF8F9FA), // background-light
       child: Column(
         children: [
-          // Header con título y botones
+          // Header compacto con búsqueda integrada
           Container(
-            padding: const EdgeInsets.all(32), // p-8
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: const BoxDecoration(
               color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+              ),
             ),
-            child: Column(
+            child: Row(
               children: [
-                // Primera fila: Título y quick actions
-                Row(
-                  children: [
-                    Text(
-                      'Historias Médicas',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1F2937), // text-light
-                      ),
-                    ),
-                    const Spacer(),
-                    // Quick actions para crear historias
-                    _buildQuickActionButton(
-                      icon: Iconsax.add,
-                      label: 'Nueva Historia',
-                      color: const Color(0xFF4F46E5),
-                      onTap: () => _openHistoryEditor(),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildQuickActionButton(
-                      icon: Iconsax.pet,
-                      label: 'Crear Camada',
-                      color: Colors.orange,
-                      onTap: _currentMrn == null ? null : () => _createLitter(),
-                    ),
-                  ],
+                // Título
+                Text(
+                  'Historias Médicas',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
                 ),
-                const SizedBox(height: 24), // mb-6
-                // Segunda fila: Barra de búsqueda con icono de exportar
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 48, // py-3
-                        decoration: BoxDecoration(
-                          color: Colors.white, // bg-card-light
-                          borderRadius: BorderRadius.circular(12), // rounded-xl
-                          border: Border.all(
-                              color: const Color(0xFFE5E7EB)), // border-light
+                const SizedBox(width: 24),
+                // Barra de búsqueda integrada
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _searchPatients,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar por MRN o nombre de mascota...',
+                        hintStyle: const TextStyle(
+                          color: Color(0xFF6B7280),
+                          fontSize: 14,
                         ),
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: _searchPatients,
-                          decoration: InputDecoration(
-                            hintText: 'Buscar por MRN o nombre de mascota...',
-                            hintStyle: const TextStyle(
-                              color: Color(0xFF6B7280), // text-muted-light
-                            ),
-                            prefixIcon: _isSearching
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: Padding(
-                                      padding: EdgeInsets.all(12.0),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                                Color(0xFF4F46E5)),
-                                      ),
-                                    ),
-                                  )
-                                : const Icon(
-                                    Iconsax.search_normal,
-                                    color: Color(0xFF6B7280),
-                                    size: 20,
+                        prefixIcon: _isSearching
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF4F46E5)),
                                   ),
-                            suffixIcon: _currentMrn != null
-                                ? IconButton(
-                                    onPressed: () => _exportHistory(),
-                                    icon: const Icon(
-                                      Iconsax.export_2,
-                                      color: Color(0xFF6B7280),
-                                      size: 20,
-                                    ),
-                                  )
-                                : null,
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                          ),
-                        ),
+                                ),
+                              )
+                            : const Icon(
+                                Iconsax.search_normal,
+                                color: Color(0xFF6B7280),
+                                size: 18,
+                              ),
+                        suffixIcon: _currentMrn != null
+                            ? IconButton(
+                                onPressed: () => _exportHistory(),
+                                icon: const Icon(
+                                  Iconsax.export_2,
+                                  color: Color(0xFF6B7280),
+                                  size: 18,
+                                ),
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                       ),
                     ),
-                  ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Botones de acción compactos
+                _buildCompactActionButton(
+                  icon: Iconsax.add,
+                  tooltip: 'Nueva Historia',
+                  color: const Color(0xFF4F46E5),
+                  onTap: () => _openHistoryEditor(),
+                ),
+                const SizedBox(width: 8),
+                _buildCompactActionButton(
+                  icon: Iconsax.pet,
+                  tooltip: 'Crear Camada',
+                  color: Colors.orange,
+                  onTap: _currentMrn == null ? null : () => _createLitter(),
                 ),
               ],
             ),
@@ -512,7 +506,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                 border: Border.all(color: const Color(0xFFE5E7EB)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -630,7 +624,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                           ),
                         );
                       }
-                      return Container(
+                      return SingleChildScrollView(
                         padding: const EdgeInsets.all(32), // p-8
                         child: Column(
                           children: [
@@ -732,7 +726,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: const Color(0xFF4F46E5)
-                                        .withOpacity(0.1),
+                                        .withValues(alpha: 0.1),
                                     border: Border.all(
                                         color: const Color(0xFF4F46E5),
                                         width: 2),
@@ -991,126 +985,100 @@ class _HistoryBlock extends StatefulWidget {
 }
 
 class _HistoryBlockState extends State<_HistoryBlock> {
-  late QuillController _controller;
+  late QuillController _summaryController;
+  late QuillController _contentDeltaController;
+  late TextEditingController _titleController;
   bool _isEditing = false;
   bool _isLocked = true; // Por defecto bloqueado
 
   @override
   void initState() {
     super.initState();
-    _initializeController();
+    _initializeControllers();
     // Por defecto bloqueado ya que no hay campo locked en la BD
     _isLocked = true;
     print(
         '🔍 _HistoryBlock initState: _isLocked = $_isLocked (por defecto bloqueado)');
   }
 
-  void _initializeController() {
-    // Usar el campo summary como contenido principal del editor
+  void _initializeControllers() {
+    // Inicializar controlador para summary
     final summaryText = widget.data['summary']?.toString() ?? '';
-    List<dynamic> deltaData;
-
+    List<dynamic> summaryDelta;
     if (summaryText.isNotEmpty) {
-      // Convertir texto plano a formato delta, asegurando que termine con \n
-      deltaData = [
+      summaryDelta = [
         {'insert': summaryText.endsWith('\n') ? summaryText : '$summaryText\n'}
       ];
     } else {
-      deltaData = [
+      summaryDelta = [
         {'insert': '\n'}
       ];
     }
-
-    _controller = QuillController(
-      document: Document.fromJson(deltaData),
+    _summaryController = QuillController(
+      document: Document.fromJson(summaryDelta),
       selection: const TextSelection.collapsed(offset: 0),
     );
+
+    // Inicializar controlador para content_delta (acotaciones)
+    final contentDeltaText = widget.data['content_delta']?.toString() ?? '';
+    print('🔍 Inicializando controladores:');
+    print('  - summary: "${widget.data['summary']?.toString() ?? ''}"');
+    print('  - content_delta: "$contentDeltaText"');
+    print('  - title: "${widget.data['title']?.toString() ?? ''}"');
+    List<dynamic> contentDelta;
+    if (contentDeltaText.isNotEmpty) {
+      try {
+        // Intentar parsear como JSON primero
+        contentDelta = jsonDecode(contentDeltaText) as List;
+        print('  - content_delta parseado como JSON: $contentDelta');
+        if (contentDelta.isEmpty) {
+          print(
+              '  - content_delta vacío después del parse, usando valor por defecto');
+          contentDelta = [
+            {'insert': '\n'}
+          ];
+        }
+      } catch (e) {
+        print(
+            '  - content_delta no es JSON válido, tratando como texto plano: $e');
+        // Si no es JSON válido, tratarlo como texto plano
+        contentDelta = [
+          {
+            'insert': contentDeltaText.endsWith('\n')
+                ? contentDeltaText
+                : '$contentDeltaText\n'
+          }
+        ];
+        print('  - content_delta convertido a formato delta: $contentDelta');
+      }
+    } else {
+      print('  - content_delta vacío, usando valor por defecto');
+      contentDelta = [
+        {'insert': '\n'}
+      ];
+    }
+    _contentDeltaController = QuillController(
+      document: Document.fromJson(contentDelta),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+
+    // Inicializar controlador para título
+    _titleController = TextEditingController(
+      text: widget.data['title']?.toString() ?? 'Consulta de seguimiento',
+    );
+
+    print(
+        '  - Contenido final summary: "${_summaryController.document.toPlainText()}"');
+    print(
+        '  - Contenido final content_delta: "${_contentDeltaController.document.toPlainText()}"');
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _summaryController.dispose();
+    _contentDeltaController.dispose();
+    _titleController.dispose();
     super.dispose();
-  }
-
-  void _toggleEdit() {
-    setState(() {
-      _isEditing = !_isEditing;
-    });
-  }
-
-  Widget _buildSimpleToolbar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Negrita
-          _buildToolbarButton(
-            icon: Iconsax.text_bold,
-            tooltip: 'Negrita',
-            onPressed: () {
-              _controller.formatSelection(Attribute.bold);
-            },
-          ),
-          const SizedBox(width: 8),
-          // Índice (lista)
-          _buildToolbarButton(
-            icon: Iconsax.text,
-            tooltip: 'Lista',
-            onPressed: () {
-              _controller.formatSelection(Attribute.ul);
-            },
-          ),
-          const SizedBox(width: 8),
-          // Separador
-          Container(
-            width: 1,
-            height: 20,
-            color: const Color(0xFFE5E7EB),
-          ),
-          const SizedBox(width: 8),
-          // Buscar
-          _buildToolbarButton(
-            icon: Iconsax.search_normal,
-            tooltip: 'Buscar',
-            onPressed: () {
-              // TODO: Implementar búsqueda
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildToolbarButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Icon(
-            icon,
-            size: 16,
-            color: const Color(0xFF6B7280),
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _toggleLock() async {
@@ -1129,40 +1097,35 @@ class _HistoryBlockState extends State<_HistoryBlock> {
         }
       });
 
-      // Mostrar mensaje de confirmación
+      // Mostrar notificación de estado
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(newLockState
-                ? 'Historia bloqueada correctamente'
-                : 'Historia desbloqueada correctamente'),
-            backgroundColor: newLockState
-                ? const Color(0xFFDC2626)
-                : const Color(0xFF16A34A),
-          ),
+        NotificationService.showHistoryStatus(
+          newLockState
+              ? 'Historia bloqueada correctamente'
+              : 'Historia desbloqueada correctamente',
+          newLockState,
         );
       }
     } catch (e) {
       print('Error al cambiar estado de bloqueo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al cambiar el estado de bloqueo'),
-            backgroundColor: Color(0xFFDC2626),
-          ),
-        );
+        NotificationService.showError('Error al cambiar el estado de bloqueo');
       }
     }
   }
 
   Future<void> _save() async {
     try {
-      // Guardar el contenido del summary y content_delta
+      // Guardar el contenido del summary, content_delta y title
       await _supa.from('medical_records').update({
-        'content_delta': jsonEncode(_controller.document.toDelta().toJson()),
-        'summary': _controller.document.toPlainText().trim().isEmpty
+        'title': _titleController.text.trim().isEmpty
             ? null
-            : _controller.document.toPlainText().trim(),
+            : _titleController.text.trim(),
+        'summary': _summaryController.document.toPlainText().trim().isEmpty
+            ? null
+            : _summaryController.document.toPlainText().trim(),
+        'content_delta':
+            jsonEncode(_contentDeltaController.document.toDelta().toJson()),
       }).eq('id', widget.data['id']);
 
       setState(() {
@@ -1171,22 +1134,12 @@ class _HistoryBlockState extends State<_HistoryBlock> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Historia guardada correctamente'),
-            backgroundColor: Color(0xFF16A34A),
-          ),
-        );
+        NotificationService.showSuccess('Historia guardada correctamente');
       }
     } catch (e) {
       print('Error al guardar historia: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al guardar la historia'),
-            backgroundColor: Color(0xFFDC2626),
-          ),
-        );
+        NotificationService.showError('Error al guardar la historia');
       }
     }
   }
@@ -1194,9 +1147,6 @@ class _HistoryBlockState extends State<_HistoryBlock> {
   @override
   Widget build(BuildContext context) {
     final date = widget.data['date']?.toString() ?? '';
-    final title =
-        (widget.data['title'] ?? 'Consulta de seguimiento').toString();
-    final summary = (widget.data['summary'] ?? '').toString();
 
     return Container(
       decoration: BoxDecoration(
@@ -1205,7 +1155,7 @@ class _HistoryBlockState extends State<_HistoryBlock> {
         border: Border.all(color: const Color(0xFFE5E7EB)), // border-light
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -1267,8 +1217,8 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                         borderRadius: BorderRadius.circular(20), // rounded-full
                         border: Border.all(
                           color: _isLocked
-                              ? const Color(0xFFDC2626).withOpacity(0.3)
-                              : const Color(0xFF16A34A).withOpacity(0.3),
+                              ? const Color(0xFFDC2626).withValues(alpha: 0.3)
+                              : const Color(0xFF16A34A).withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
@@ -1307,30 +1257,47 @@ class _HistoryBlockState extends State<_HistoryBlock> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Título
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1F2937), // text-light
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Resumen
-                if (summary.isNotEmpty)
-                  Text(
-                    summary,
+                // Campo de título editable
+                if (_isEditing) ...[
+                  TextFormField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Título de la consulta',
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
                     style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF1F2937), // text-light
-                      height: 1.5,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1F2937),
                     ),
                   ),
-                const SizedBox(height: 12),
-                // Editor Quill
+                  const SizedBox(height: 16),
+                ] else ...[
+                  Text(
+                    _titleController.text.isNotEmpty
+                        ? _titleController.text
+                        : 'Consulta de seguimiento',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1F2937),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Campo de resumen (summary) editable
                 if (_isEditing) ...[
-                  _buildSimpleToolbar(),
+                  const Text(
+                    'Resumen de la consulta',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -1339,9 +1306,55 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: QuillEditor.basic(
-                      configurations: QuillEditorConfigurations(
-                        controller: _controller,
+                      controller: _summaryController,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ] else ...[
+                  if (_summaryController.document
+                      .toPlainText()
+                      .trim()
+                      .isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
+                      child: Text(
+                        _summaryController.document.toPlainText(),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF1F2937),
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ],
+
+                // Campo de acotaciones (content_delta) editable
+                if (_isEditing) ...[
+                  const Text(
+                    'Acotaciones adicionales',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: QuillEditor.basic(
+                      controller: _contentDeltaController,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -1357,29 +1370,35 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                       ),
                       const SizedBox(width: 12),
                       TextButton(
-                        onPressed: _toggleEdit,
+                        onPressed: () => setState(() => _isEditing = false),
                         child: const Text('Cancelar'),
                       ),
                     ],
                   ),
                 ] else ...[
-                  // Si no está en edición pero tampoco está bloqueado, mostrar el contenido
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                  if (_contentDeltaController.document
+                      .toPlainText()
+                      .trim()
+                      .isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Text(
+                        _contentDeltaController.document.toPlainText(),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF1F2937),
+                          height: 1.5,
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      _controller.document.toPlainText().isEmpty
-                          ? 'Haz clic en el badge "Editable" para agregar contenido'
-                          : _controller.document.toPlainText(),
-                      style: const TextStyle(
-                          fontSize: 14, color: Color(0xFF6B7280)),
-                    ),
-                  ),
+                    const SizedBox(height: 12),
+                  ],
                 ],
                 // Zona de adjuntos solo si no está bloqueado
                 if (!_isLocked) ...[
@@ -1613,10 +1632,8 @@ class _HistoryEditorState extends State<_HistoryEditor> {
           const SizedBox(height: 16),
 
           // Editor Quill
-          QuillToolbar.simple(
-            configurations: QuillSimpleToolbarConfigurations(
-              controller: _controller,
-            ),
+          QuillSimpleToolbar(
+            controller: _controller,
           ),
 
           const SizedBox(height: 8),
@@ -1628,9 +1645,7 @@ class _HistoryEditorState extends State<_HistoryEditor> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: QuillEditor.basic(
-              configurations: QuillEditorConfigurations(
-                controller: _controller,
-              ),
+              controller: _controller,
             ),
           ),
         ]),

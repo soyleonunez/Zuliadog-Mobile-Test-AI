@@ -7,6 +7,7 @@ Esta carpeta contiene todos los scripts SQL para la configuración y mantenimien
 ### 🔧 **Scripts de Configuración Inicial**
 - `CREATE_GET_MEDICAL_RECORDS_RPC.sql` - Función RPC para obtener registros médicos
 - `ALTERNATIVE_PRESCRIPTION_FUNCTION.sql` - Función alternativa para prescripciones
+- `CREATE_PATIENTS_SEARCH_VIEW.sql` - Vista optimizada para búsqueda de pacientes
 
 ### 🔒 **Scripts de Seguridad (RLS)**
 - `DISABLE_RLS_TEMPORARILY.sql` - Deshabilitar RLS temporalmente
@@ -18,6 +19,10 @@ Esta carpeta contiene todos los scripts SQL para la configuración y mantenimien
 - `FIX_POLICIES.sql` - Corregir políticas generales
 - `FIX_NOTES_TABLE.sql` - Corregir tabla de notas
 - `UPDATE_CLINIC_ROLES_REFERENCES.sql` - Actualizar referencias de roles
+- `FIX_CONTENT_DELTA_DATA.sql` - Corregir datos de content_delta vs summary
+
+### 🔍 **Scripts de Depuración**
+- `DEBUG_CONTENT_DELTA_ISSUE.sql` - Depurar problema de content_delta vs summary
 
 ### 🧹 **Scripts de Limpieza**
 - `CLEANUP_STORAGE_PLACEHOLDERS.sql` - Limpiar placeholders de almacenamiento
@@ -35,6 +40,9 @@ Esta carpeta contiene todos los scripts SQL para la configuración y mantenimien
 - `medical_records` - Historias médicas
 - `clinic_roles` - Roles de clínica
 - `prescriptions` - Prescripciones médicas
+
+### Vistas
+- `patients_search` - Vista optimizada para búsqueda de pacientes con etiquetas en español
 
 ### Funciones RPC
 - `get_medical_records()` - Obtener historias médicas

@@ -28,7 +28,7 @@ dependencies:
   open_file: ^3.3.2
   fluttertoast: ^8.2.4
   flutter_dotenv: ^6.0.0       # NO poner .env en assets (seguridad)
-  intl: ^0.19.0
+  intl: 0.20.2
 
   # --- Archivos y documentos ---
   file_picker: ^10.3.3          # si prefieres, deja ^6.1.1
@@ -42,7 +42,7 @@ dependencies:
   pdfx: ^2.6.0
   
   # --- Editor de texto rico ---
-  flutter_quill: ^10.8.0       # editor rich text (toolbar + editor)
+  flutter_quill: 11.4.2       # editor rich text (toolbar + editor)
   # flutter_quill_extensions: ^10.8.0  # imágenes/links en el editor (comentado por conflicto de dependencias)
 
   # --- UI / Widgets ---
