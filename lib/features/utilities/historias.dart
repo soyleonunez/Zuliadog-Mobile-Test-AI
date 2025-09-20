@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:zuliadog/features/widgets/optimizedhist.dart';
 import '../menu.dart';
 import '../../core/navigation.dart';
@@ -63,7 +62,41 @@ class _HistoriasPageState extends State<HistoriasPage> {
                     activeRoute: 'frame_historias',
                     onTap: (route) {
                       if (route != 'frame_historias') {
-                        NavigationHelper.navigateToRoute(context, '/home');
+                        // Navegar a la página correspondiente
+                        String routePath = '/home'; // fallback
+                        switch (route) {
+                          case 'frame_home':
+                            routePath = '/home';
+                            break;
+                          case 'frame_pacientes':
+                            routePath = '/pacientes';
+                            break;
+                          case 'frame_historias':
+                            return; // Ya estamos aquí
+                          case 'frame_recetas':
+                            routePath = '/recetas';
+                            break;
+                          case 'frame_laboratorio':
+                            routePath = '/laboratorio';
+                            break;
+                          case 'frame_agenda':
+                            routePath = '/agenda';
+                            break;
+                          case 'frame_visor_medico':
+                            routePath = '/visor-medico';
+                            break;
+                          case 'frame_recursos':
+                            routePath = '/recursos';
+                            break;
+                          case 'frame_tickets':
+                            routePath = '/tickets';
+                            break;
+                          case 'frame_reportes':
+                            routePath = '/reportes';
+                            break;
+                        }
+                        NavigationHelper.navigateToRouteReplacement(
+                            context, routePath);
                       }
                     },
                     userRole: UserRole.doctor,

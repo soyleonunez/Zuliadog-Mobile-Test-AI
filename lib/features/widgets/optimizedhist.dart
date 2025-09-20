@@ -999,27 +999,22 @@ class _HistoryBlockState extends State<_HistoryBlock> {
   void initState() {
     super.initState();
     _initializeController();
-    // Por defecto todos están bloqueados, solo se desbloquean si locked = false en BD
-    _isLocked = widget.data['locked'] != true;
+    // Por defecto bloqueado ya que no hay campo locked en la BD
+    _isLocked = true;
+    print(
+        '🔍 _HistoryBlock initState: _isLocked = $_isLocked (por defecto bloqueado)');
   }
 
   void _initializeController() {
-    final initialDelta = widget.data['content_delta']?.toString();
+    // Usar el campo summary como contenido principal del editor
+    final summaryText = widget.data['summary']?.toString() ?? '';
     List<dynamic> deltaData;
 
-    if (initialDelta != null && initialDelta.isNotEmpty) {
-      try {
-        deltaData = jsonDecode(initialDelta) as List;
-        if (deltaData.isEmpty) {
-          deltaData = [
-            {'insert': '\n'}
-          ];
-        }
-      } catch (e) {
-        deltaData = [
-          {'insert': '\n'}
-        ];
-      }
+    if (summaryText.isNotEmpty) {
+      // Convertir texto plano a formato delta, asegurando que termine con \n
+      deltaData = [
+        {'insert': summaryText.endsWith('\n') ? summaryText : '$summaryText\n'}
+      ];
     } else {
       deltaData = [
         {'insert': '\n'}
@@ -1044,17 +1039,156 @@ class _HistoryBlockState extends State<_HistoryBlock> {
     });
   }
 
-  void _toggleLock() {
-    setState(() {
-      _isLocked = !_isLocked;
-    });
+  Widget _buildSimpleToolbar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Negrita
+          _buildToolbarButton(
+            icon: Iconsax.text_bold,
+            tooltip: 'Negrita',
+            onPressed: () {
+              _controller.formatSelection(Attribute.bold);
+            },
+          ),
+          const SizedBox(width: 8),
+          // Índice (lista)
+          _buildToolbarButton(
+            icon: Iconsax.text,
+            tooltip: 'Lista',
+            onPressed: () {
+              _controller.formatSelection(Attribute.ul);
+            },
+          ),
+          const SizedBox(width: 8),
+          // Separador
+          Container(
+            width: 1,
+            height: 20,
+            color: const Color(0xFFE5E7EB),
+          ),
+          const SizedBox(width: 8),
+          // Buscar
+          _buildToolbarButton(
+            icon: Iconsax.search_normal,
+            tooltip: 'Buscar',
+            onPressed: () {
+              // TODO: Implementar búsqueda
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolbarButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onPressed,
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: const Color(0xFF6B7280),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleLock() async {
+    final newLockState = !_isLocked;
+
+    try {
+      // Solo actualizar el estado local ya que no hay campo locked en la BD
+      setState(() {
+        _isLocked = newLockState;
+        // Si se desbloquea, automáticamente entrar en modo edición
+        // Si se bloquea, salir del modo edición
+        if (!newLockState) {
+          _isEditing = true;
+        } else {
+          _isEditing = false;
+        }
+      });
+
+      // Mostrar mensaje de confirmación
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newLockState
+                ? 'Historia bloqueada correctamente'
+                : 'Historia desbloqueada correctamente'),
+            backgroundColor: newLockState
+                ? const Color(0xFFDC2626)
+                : const Color(0xFF16A34A),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error al cambiar estado de bloqueo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al cambiar el estado de bloqueo'),
+            backgroundColor: Color(0xFFDC2626),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _save() async {
-    // TODO: Implementar guardado
-    setState(() {
-      _isEditing = false;
-    });
+    try {
+      // Guardar el contenido del summary y content_delta
+      await _supa.from('medical_records').update({
+        'content_delta': jsonEncode(_controller.document.toDelta().toJson()),
+        'summary': _controller.document.toPlainText().trim().isEmpty
+            ? null
+            : _controller.document.toPlainText().trim(),
+      }).eq('id', widget.data['id']);
+
+      setState(() {
+        _isEditing = false;
+        // Mantener el estado actual después de guardar
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Historia guardada correctamente'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error al guardar historia: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al guardar la historia'),
+            backgroundColor: Color(0xFFDC2626),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -1116,11 +1250,14 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                     ],
                   ),
                 ),
-                // Badge de estado y botón menú
-                Row(
-                  children: [
-                    // Badge de estado
-                    Container(
+                // Badge de estado clickeable
+                Tooltip(
+                  message: _isLocked
+                      ? 'Hacer clic para desbloquear y editar'
+                      : 'Hacer clic para bloquear',
+                  child: GestureDetector(
+                    onTap: _toggleLock,
+                    child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
@@ -1128,6 +1265,12 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                             ? const Color(0xFFFEE2E2) // red-100
                             : const Color(0xFFDCFCE7), // green-100
                         borderRadius: BorderRadius.circular(20), // rounded-full
+                        border: Border.all(
+                          color: _isLocked
+                              ? const Color(0xFFDC2626).withOpacity(0.3)
+                              : const Color(0xFF16A34A).withOpacity(0.3),
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1153,24 +1296,7 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    // Botón menú
-                    GestureDetector(
-                      onTap: _isLocked ? _toggleLock : _toggleEdit,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Iconsax.more_2,
-                          size: 20,
-                          color: const Color(0xFF6B7280), // text-muted-light
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -1204,11 +1330,7 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                 const SizedBox(height: 12),
                 // Editor Quill
                 if (_isEditing) ...[
-                  QuillToolbar.simple(
-                    configurations: QuillSimpleToolbarConfigurations(
-                      controller: _controller,
-                    ),
-                  ),
+                  _buildSimpleToolbar(),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -1241,18 +1363,18 @@ class _HistoryBlockState extends State<_HistoryBlock> {
                     ],
                   ),
                 ] else ...[
-                  // Vista previa del contenido
+                  // Si no está en edición pero tampoco está bloqueado, mostrar el contenido
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8F9FA),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: const Color(0xFFE5E7EB)),
                     ),
                     child: Text(
                       _controller.document.toPlainText().isEmpty
-                          ? 'Sin contenido'
+                          ? 'Haz clic en el badge "Editable" para agregar contenido'
                           : _controller.document.toPlainText(),
                       style: const TextStyle(
                           fontSize: 14, color: Color(0xFF6B7280)),
