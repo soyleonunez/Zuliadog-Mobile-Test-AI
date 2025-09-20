@@ -382,7 +382,6 @@ class HistoryService {
       }
 
       final q = query.trim();
-      final isNumeric = int.tryParse(q.replaceAll(RegExp(r'\D'), '')) != null;
 
       // Usar la vista patients_search que tiene todos los datos necesarios
       var queryBuilder = _supa.from('patients_search').select('''
