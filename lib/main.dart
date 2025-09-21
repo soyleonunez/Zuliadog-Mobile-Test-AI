@@ -64,8 +64,7 @@ class ZuliadogApp extends StatelessWidget {
       routes: {
         '/home': (context) => const HomeScreen(),
         VisorMedicoPage.route: (context) => const VisorMedicoPage(),
-        '/pacientes': (context) => const PatientsPage(
-            clinicId: '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'),
+        '/pacientes': (context) => const PatientsDashboardPage(),
         HistoriasPage.route: (context) => const HistoriasPage(),
         RecetasPage.route: (context) => const RecetasPage(),
         LaboratorioPage.route: (context) => const LaboratorioPage(),

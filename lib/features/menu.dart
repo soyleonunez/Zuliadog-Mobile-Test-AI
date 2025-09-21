@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 enum UserRole { doctor, admin }
 
@@ -132,6 +133,115 @@ class AppSidebar extends StatelessWidget {
     this.userRole = UserRole.doctor,
   });
 
+  // Función para mostrar diálogo de actualización
+  void _showRefreshDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primary500, AppColors.primary600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child:
+                    const Icon(Iconsax.refresh, size: 16, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              const Text('Actualizando datos...'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary500),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Sincronizando información con el servidor...',
+                style: AppText.bodyS.copyWith(color: AppColors.neutral500),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    // Simular actualización de base de datos
+    _refreshDatabase(context);
+  }
+
+  // Función para actualizar la base de datos
+  Future<void> _refreshDatabase(BuildContext context) async {
+    try {
+      // Simular tiempo de actualización
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Aquí puedes agregar la lógica real de actualización
+      // Por ejemplo: await DatabaseService.refreshAllData();
+
+      // Cerrar el diálogo
+      if (context.mounted) {
+        Navigator.of(context).pop();
+
+        // Mostrar mensaje de éxito
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Iconsax.tick_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                const Text('Datos actualizados correctamente'),
+              ],
+            ),
+            backgroundColor: AppColors.success500,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      // Cerrar el diálogo en caso de error
+      if (context.mounted) {
+        Navigator.of(context).pop();
+
+        // Mostrar mensaje de error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Iconsax.close_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                const Text('Error al actualizar los datos'),
+              ],
+            ),
+            backgroundColor: AppColors.danger500,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = visibleMenu(userRole);
@@ -151,19 +261,39 @@ class AppSidebar extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
             child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary500, AppColors.primary600],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      // Navegar al home y actualizar base de datos
+                      onTap('frame_home');
+                      _showRefreshDialog(context);
+                    },
                     borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SvgPicture.asset(
+                          'Assets/Icon/appicon.svg',
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
                   ),
-                  child:
-                      const Icon(Iconsax.heart, size: 20, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
