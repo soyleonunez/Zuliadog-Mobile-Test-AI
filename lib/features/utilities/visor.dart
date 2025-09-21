@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/theme.dart';
 import '../../core/navigation.dart';
 import '../../features/data/storage_helper.dart';
-import '../../features/data/file_service.dart';
+import '../../features/data/data_service.dart';
 // import '../../features/widgets/file_viewer_dialog.dart'; // Archivo eliminado
 import '../menu.dart';
 
@@ -933,8 +933,8 @@ class _VisorPageState extends State<VisorPage> {
 
   Future<void> _testConnection() async {
     try {
-      final fileService = FileService();
-      final result = await fileService.testConnection();
+      final dataService = DataService();
+      final result = await dataService.testFileConnection();
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -963,8 +963,8 @@ class _VisorPageState extends State<VisorPage> {
   // ======= Funciones de acción =======
   Future<void> _downloadFile(DocItem item) async {
     try {
-      final fileService = FileService();
-      await fileService.downloadToDownloads(item.url, item.name);
+      final dataService = DataService();
+      await dataService.downloadToDownloads(item.url, item.name);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -23,7 +23,7 @@ class HistoryService {
         'patients',
         'medical_records',
         'record_attachments',
-        'clinic_roles', // Nueva tabla (antes clinic_members)
+        'clinic_roles',
         'owners',
         'species',
         'breeds',
@@ -85,45 +85,20 @@ class HistoryService {
 
       final clinicIdValue = clinicId ?? '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203';
 
-      // Primero intentar con la vista v_records_full
-      try {
-        final rows = await _supa
-            .from('v_records_full')
-            .select()
-            .eq('clinic_id', clinicIdValue)
-            .eq('patient_id', patientMrn)
-            .order('date', ascending: false)
-            .order('created_at', ascending: false);
+      // Usar directamente la tabla medical_records
+      final rows = await _supa
+          .from('medical_records')
+          .select()
+          .eq('clinic_id', clinicIdValue)
+          .eq('patient_id', patientMrn)
+          .order('date', ascending: false)
+          .order('created_at', ascending: false);
 
-        print(
-            '📊 Resultados obtenidos de v_records_full: ${rows.length} bloques');
+      print(
+          '📊 Resultados obtenidos de medical_records: ${rows.length} bloques');
 
-        if (rows.isNotEmpty) {
-          return _processHistoryBlocks(rows);
-        }
-      } catch (e) {
-        print(
-            '⚠️ Error con v_records_full, intentando con tabla medical_records: $e');
-      }
-
-      // Si falla la vista, intentar con la tabla medical_records directamente
-      try {
-        final rows = await _supa
-            .from('medical_records')
-            .select()
-            .eq('clinic_id', clinicIdValue)
-            .eq('patient_id', patientMrn)
-            .order('date', ascending: false)
-            .order('created_at', ascending: false);
-
-        print(
-            '📊 Resultados obtenidos de medical_records: ${rows.length} bloques');
-
-        if (rows.isNotEmpty) {
-          return _processHistoryBlocks(rows);
-        }
-      } catch (e) {
-        print('⚠️ Error con tabla medical_records: $e');
+      if (rows.isNotEmpty) {
+        return _processHistoryBlocks(rows);
       }
 
       print('⚠️ No se encontraron bloques para patientMrn: $patientMrn');
@@ -244,7 +219,7 @@ class HistoryService {
 
   /// Obtiene la URL pública de un archivo
   String getPublicUrl(String filePath) {
-    return _supa.storage.from('medical-files').getPublicUrl(filePath);
+    return _supa.storage.from('medical_records').getPublicUrl(filePath);
   }
 
   /// Convierte doc_type a MIME type
@@ -366,7 +341,7 @@ class HistoryService {
   // MÉTODOS DE BÚSQUEDA DE PACIENTES
   // ========================================
 
-  /// Busca pacientes por nombre, MRN o dueño usando la vista patients_search
+  /// Busca pacientes por nombre, MRN o dueño usando patients_search
   Future<List<PatientSearchRow>> searchPatients(String query,
       {int limit = 30}) async {
     try {
@@ -375,31 +350,27 @@ class HistoryService {
 
       print('🔍 Buscando pacientes con query: "$query" en clinicId: $clinicId');
 
-      // Si no hay query, devolver lista vacía
-      if (query.trim().isEmpty) {
-        print('⚠️ Query vacío, devolviendo lista vacía');
-        return [];
-      }
-
       final q = query.trim();
 
-      // Usar la vista patients_search que tiene todos los datos necesarios
+      // Usar patients_search que tiene todos los datos necesarios
       var queryBuilder = _supa.from('patients_search').select('''
-            patient_id, history_number, patient_name, species_code, species_label, 
-            breed_id, breed_label, sex, birth_date, color, weight_kg,
-            owner_id, owner_name, owner_phone, owner_email
+            patient_id, clinic_id, patient_name, history_number, mrn_int,
+            owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex
           ''').eq('clinic_id', clinicId);
 
-      // Búsqueda con OR compuesto
-      final ors = <String>[
-        "patient_name.ilike.%$q%",
-        "owner_name.ilike.%$q%",
-        "history_number.ilike.%$q%", // Búsqueda parcial en número de historia
-        "history_number.eq.$q", // Búsqueda exacta en número de historia
-      ];
+      if (q.isNotEmpty) {
+        // Búsqueda con OR compuesto
+        final ors = <String>[
+          "patient_name.ilike.%$q%",
+          "owner_name.ilike.%$q%",
+          "history_number.ilike.%$q%", // Búsqueda parcial en número de historia
+          "history_number.eq.$q", // Búsqueda exacta en número de historia
+        ];
+
+        queryBuilder = queryBuilder.or(ors.join(','));
+      }
 
       final rows = await queryBuilder
-          .or(ors.join(','))
           .order('patient_name', ascending: true)
           .limit(limit);
 
@@ -411,7 +382,7 @@ class HistoryService {
     }
   }
 
-  /// Obtiene historias médicas de un paciente usando v_records_full
+  /// Obtiene historias médicas de un paciente usando medical_records
   Future<List<Map<String, dynamic>>> fetchRecords({
     required String clinicId,
     required String mrn,
@@ -419,49 +390,32 @@ class HistoryService {
     try {
       print('🔍 Obteniendo historias para MRN: $mrn en clinicId: $clinicId');
 
-      // Consulta directa sin filtros complejos para evitar problemas de RLS
-      print('🔄 Consultando tabla medical_records...');
-
-      final res =
-          await _supa.from('medical_records').select('*').eq('patient_id', mrn);
+      // Consulta directa a medical_records
+      final res = await _supa
+          .from('medical_records')
+          .select('*')
+          .eq('clinic_id', clinicId)
+          .eq('patient_id', mrn);
 
       final records = List<Map<String, dynamic>>.from(res as List);
-      print('📊 Historias encontradas (sin filtros): ${records.length}');
-
-      // Debug: mostrar todos los registros encontrados
-      if (records.isNotEmpty) {
-        print('🔍 Registros encontrados:');
-        for (var record in records) {
-          print(
-              '  - ID: ${record['id']}, patient_id: ${record['patient_id']}, title: ${record['title']}');
-        }
-      } else {
-        print('❌ No se encontraron registros con patient_id: $mrn');
-
-        // Ejecutar diagnóstico completo
-        await debugAllRecords();
-      }
-
-      // Filtrar por clinic_id en el código
-      final filteredRecords =
-          records.where((record) => record['clinic_id'] == clinicId).toList();
+      print('📊 Historias encontradas: ${records.length}');
 
       // Ordenar por fecha (más reciente primero)
-      filteredRecords.sort((a, b) {
+      records.sort((a, b) {
         final dateA = DateTime.tryParse(a['date'] ?? '') ?? DateTime(1900);
         final dateB = DateTime.tryParse(b['date'] ?? '') ?? DateTime(1900);
         return dateB.compareTo(dateA);
       });
 
-      print('📊 Historias filtradas y ordenadas: ${filteredRecords.length}');
-      return filteredRecords;
+      print('📊 Historias ordenadas: ${records.length}');
+      return records;
     } catch (e) {
-      print('❌ Error general en fetchRecords: $e');
+      print('❌ Error en fetchRecords: $e');
       rethrow;
     }
   }
 
-  /// Obtiene un paciente por MRN usando la vista v_patient_owner
+  /// Obtiene un paciente por MRN usando patients_search
   Future<PatientSummary?> getPatientSummary(String patientMrn) async {
     try {
       final clinicId =
@@ -469,15 +423,14 @@ class HistoryService {
 
       print('🔍 Buscando paciente con MRN: $patientMrn en clinicId: $clinicId');
 
-      // Primero intentar con la vista v_patient_owner
+      // Usar patients_search que tiene toda la información necesaria
       try {
-        // Intentar buscar por patient_uuid (si es UUID) o por history_number (si es número)
         var queryBuilder =
-            _supa.from('v_patient_owner').select().eq('clinic_id', clinicId);
+            _supa.from('patients_search').select().eq('clinic_id', clinicId);
 
-        // Si parece ser un UUID, buscar por patient_uuid, sino por history_number
+        // Si parece ser un UUID, buscar por patient_id, sino por history_number
         if (patientMrn.contains('-')) {
-          queryBuilder = queryBuilder.eq('patient_uuid', patientMrn);
+          queryBuilder = queryBuilder.eq('patient_id', patientMrn);
         } else {
           queryBuilder = queryBuilder.eq('history_number', patientMrn);
         }
@@ -487,35 +440,11 @@ class HistoryService {
         if (rows.isNotEmpty) {
           final row = rows.first;
           print(
-              '✅ Paciente encontrado en v_patient_owner: ${row['patient_name']}');
+              '✅ Paciente encontrado en patients_search: ${row['patient_name']}');
           return PatientSummary.fromJson(row);
         }
       } catch (e) {
-        print(
-            '⚠️ Error con v_patient_owner, intentando con tabla patients: $e');
-      }
-
-      // Si falla la vista, intentar con la tabla patients directamente
-      try {
-        var queryBuilder =
-            _supa.from('patients').select().eq('clinic_id', clinicId);
-
-        // Si parece ser un UUID, buscar por id, sino por mrn
-        if (patientMrn.contains('-')) {
-          queryBuilder = queryBuilder.eq('id', patientMrn);
-        } else {
-          queryBuilder = queryBuilder.eq('mrn', patientMrn);
-        }
-
-        final rows = await queryBuilder.limit(1);
-
-        if (rows.isNotEmpty) {
-          final row = rows.first;
-          print('✅ Paciente encontrado en tabla patients: ${row['name']}');
-          return PatientSummary.fromJson(row);
-        }
-      } catch (e) {
-        print('⚠️ Error con tabla patients: $e');
+        print('⚠️ Error con patients_search: $e');
       }
 
       print('⚠️ No se encontró paciente con MRN: $patientMrn');
@@ -793,7 +722,7 @@ class HistoryService {
   String getPublicUrlForRecord(String mrn, String recordId, String fileName) {
     // Convención: records/<MRN>/<RECORD_ID>/<archivo.ext>
     final filePath = 'records/$mrn/$recordId/$fileName';
-    return _supa.storage.from('medical-files').getPublicUrl(filePath);
+    return _supa.storage.from('medical_records').getPublicUrl(filePath);
   }
 
   /// Sube un PDF de receta a Storage usando la convención recomendada

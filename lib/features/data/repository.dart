@@ -398,7 +398,7 @@ class Repository {
 class DataRepository {
   final SupabaseClient _db = Supabase.instance.client;
 
-  /// Busca pacientes por múltiples criterios
+  /// Busca pacientes por múltiples criterios usando patients_search
   Future<List<PatientSearchRow>> searchPatients(String query,
       {int limit = 30}) async {
     final q = query.trim();
@@ -407,7 +407,7 @@ class DataRepository {
     final baseSel = _db.from('patients_search').select(
       '''
       patient_id, clinic_id, patient_name, history_number, mrn_int,
-      owner_name, owner_phone, owner_email, species_label, breed_label, sex
+      owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex
       ''',
     );
 

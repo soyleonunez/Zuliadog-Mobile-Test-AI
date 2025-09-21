@@ -7,6 +7,8 @@ import 'package:iconsax/iconsax.dart';
 import 'package:zuliadog/core/theme.dart';
 import 'package:zuliadog/core/notifications.dart';
 import 'package:zuliadog/features/data/buscador.dart';
+import 'package:zuliadog/features/data/data_service.dart';
+import 'package:zuliadog/features/widgets/text_editor.dart';
 
 final _supa = Supabase.instance.client;
 
@@ -32,6 +34,10 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   List<PatientSearchRow> _searchResults = [];
   bool _isSearching = false;
 
+  // Cache local de historias para optimizar eliminaciones
+  List<Map<String, dynamic>> _cachedHistories = [];
+  bool _isLoadingHistories = false;
+
   @override
   void initState() {
     super.initState();
@@ -46,24 +52,53 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     } else {
       _future = Future.value([]);
       _patientFuture = Future.value(null);
+      _cachedHistories = [];
     }
   }
 
   Future<List<Map<String, dynamic>>> _fetchHistories() async {
     if (_currentMrn == null) return [];
 
+    setState(() {
+      _isLoadingHistories = true;
+    });
+
     try {
+      // Usar medical_records para obtener todos los bloques de historia
       final rows = await _supa
           .from('medical_records')
           .select(
-              'id,date,title,summary,diagnosis,department_code,locked,created_by,created_at,content_delta')
+              'id, date, title, summary, doctor, department_code, locked, created_by, created_at, content_delta, patient_id, clinic_id')
           .eq('clinic_id', widget.clinicId)
           .eq('patient_id', _currentMrn!)
           .order('date', ascending: false)
           .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(rows as List);
+
+      final histories = List<Map<String, dynamic>>.from(rows as List);
+
+      // Preservar bloques temporales del cache local
+      final tempBlocks =
+          _cachedHistories.where((h) => h['is_temp'] == true).toList();
+
+      // Actualizar cache local con bloques reales + temporales
+      setState(() {
+        _cachedHistories = [...histories, ...tempBlocks];
+        _isLoadingHistories = false;
+      });
+
+      print('🔍 _fetchHistories - tempBlocks count: ${tempBlocks.length}');
+      print('🔍 _fetchHistories - total cached: ${_cachedHistories.length}');
+      for (var block in _cachedHistories) {
+        print(
+            '🔍 _fetchHistories - block: ${block['id']} - is_new: ${block['is_new']} - is_temp: ${block['is_temp']}');
+      }
+
+      return histories;
     } catch (e) {
       print('Error al cargar historias: $e');
+      setState(() {
+        _isLoadingHistories = false;
+      });
       return [];
     }
   }
@@ -74,9 +109,11 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     }
 
     try {
+      // Usar vista pública patients para obtener información completa del paciente
       final rows = await _supa
           .from('patients')
-          .select('id,name,species,breed,sex,birth_date,mrn')
+          .select('*')
+          .eq('clinic_id', widget.clinicId)
           .eq('mrn', _currentMrn!)
           .limit(1);
 
@@ -86,6 +123,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 
       return null;
     } catch (e) {
+      print('Error al cargar paciente: $e');
       return null;
     }
   }
@@ -150,6 +188,51 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         _searchResults = [];
         _isSearching = false;
       });
+    }
+  }
+
+  Future<void> _createNewBlock() async {
+    // Verificar que hay un paciente seleccionado
+    if (_currentMrn == null) {
+      NotificationService.showWarning('Primero selecciona un paciente');
+      return;
+    }
+
+    try {
+      // Crear un nuevo bloque completamente vacío
+      final now = DateTime.now();
+      final newBlock = {
+        'id': 'temp_${now.millisecondsSinceEpoch}', // ID temporal
+        'clinic_id': widget.clinicId,
+        'patient_id': _currentMrn!,
+        'date': now.toIso8601String().substring(0, 10), // Solo fecha, no hora
+        'title': null,
+        'summary': null,
+        'doctor': null,
+        'department_code': 'MED',
+        'locked': false,
+        'created_by': null,
+        'created_at': now.toIso8601String(),
+        'content_delta': null,
+        'is_new': true, // Marcar como nuevo para identificar
+        'is_temp': true, // Marcar como temporal para no duplicar
+      };
+
+      // Agregar al cache local inmediatamente
+      setState(() {
+        _cachedHistories.insert(0, newBlock);
+      });
+
+      print('🔍 _createNewBlock - newBlock: $newBlock');
+      print(
+          '🔍 _createNewBlock - cachedHistories count: ${_cachedHistories.length}');
+
+      NotificationService.showSuccess(
+          'Nuevo bloque creado. Puedes editarlo ahora.');
+    } catch (e) {
+      if (mounted) {
+        NotificationService.showError('Error al crear bloque: $e');
+      }
     }
   }
 
@@ -236,9 +319,102 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     );
   }
 
+  void _navigateToPatients() {
+    // Navegar a la pantalla de pacientes
+    Navigator.pushNamed(context, '/pacientes');
+  }
+
+  void _exportToPDF() {
+    // TODO: Implementar exportación a PDF
+    NotificationService.showInfo('Exportar a PDF (pendiente)');
+  }
+
   void _editPatient() {
     // TODO: Implementar edición de paciente
     NotificationService.showInfo('Editar Paciente (pendiente)');
+  }
+
+  /// Elimina una historia del cache local de manera eficiente
+  void _removeHistoryFromCache(String historyId) {
+    setState(() {
+      _cachedHistories.removeWhere((history) => history['id'] == historyId);
+    });
+  }
+
+  /// Construye la lista de historias de manera optimizada
+  Widget _buildHistoriesList(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Iconsax.note_2, size: 64, color: AppTheme.neutral500),
+            const SizedBox(height: 16),
+            const Text('Sin historias aún',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            const Text('Crea la primera historia médica para este paciente'),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => _openHistoryEditor(),
+              icon: const Icon(Iconsax.add, size: 20),
+              label: const Text('Crear Primera Historia'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary500,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32), // p-8
+      child: Column(
+        children: [
+          // Espaciado entre cards
+          ...items.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            return Column(
+              children: [
+                TextEditor(
+                  key: ValueKey(item['id']), // Clave única para cada TextEditor
+                  data: item,
+                  tableName: 'medical_records',
+                  recordId: item['id'],
+                  clinicId: widget.clinicId,
+                  dateFormat: _df,
+                  onEdit: () => _openHistoryEditor(record: item),
+                  onSaved: () {
+                    // Recargar solo si no hay cache local
+                    if (_cachedHistories.isEmpty) {
+                      setState(() {
+                        _future = _fetchHistories();
+                      });
+                    }
+                  },
+                  onDeleted: () {
+                    // Eliminar del cache local de manera eficiente
+                    _removeHistoryFromCache(item['id']);
+                  },
+                  showAttachments: true,
+                  showLockToggle: true,
+                  showDeleteButton: true,
+                ),
+                if (index < items.length - 1)
+                  const SizedBox(height: 24), // space-y-6
+              ],
+            );
+          }).toList(),
+        ],
+      ),
+    );
   }
 
   Widget _buildPatientInfoRow(String label, String value) {
@@ -296,13 +472,13 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: AppTheme.primary500.withValues(alpha: 0.1),
-              child: Icon(
-                Iconsax.pet,
-                color: AppTheme.primary500,
-                size: 20,
-              ),
+            // Avatar con imagen de raza o fallback por especie
+            DataService().buildBreedImageWidget(
+              breedId: patient.breedId,
+              species: patient.species,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -461,34 +637,31 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
             icon: Iconsax.add_square,
             tooltip: 'Nuevo Bloque',
             color: const Color(0xFF16A34A),
-            onTap: _currentMrn == null ? null : () => _openHistoryEditor(),
+            onTap: _currentMrn == null
+                ? null
+                : () {
+                    print(
+                        '🔍 Botón Nuevo Bloque presionado - _currentMrn: $_currentMrn');
+                    _createNewBlock();
+                  },
           ),
           const SizedBox(width: 8),
-          // 2. Nueva Historia (icono + texto)
+          // 2. Nueva Historia (navegación a pacientes)
           _buildQuickActionButton(
             icon: Iconsax.user_add,
             text: 'Nueva Historia',
             tooltip: 'Crear Nuevo Paciente',
-            color: const Color(0xFF4F46E5),
-            onTap: () => _createNewPatient(),
+            color: const Color(0xFF3B82F6),
+            onTap: () => _navigateToPatients(),
           ),
           const SizedBox(width: 8),
-          // 3. Crear Camada (icono + texto)
+          // 3. Exportar PDF
           _buildQuickActionButton(
-            icon: Iconsax.pet,
-            text: 'Camada',
-            tooltip: 'Crear Camada',
-            color: Colors.orange,
-            onTap: _currentMrn == null ? null : () => _createLitter(),
-          ),
-          const SizedBox(width: 8),
-          // 4. Editar Paciente (icono + texto)
-          _buildQuickActionButton(
-            icon: Iconsax.edit,
-            text: 'Editar',
-            tooltip: 'Editar Paciente',
-            color: const Color(0xFF4F46E5),
-            onTap: () => _editPatient(),
+            icon: Iconsax.document_download,
+            text: 'Exportar PDF',
+            tooltip: 'Exportar Historia a PDF',
+            color: const Color(0xFFDC2626),
+            onTap: _currentMrn == null ? null : () => _exportToPDF(),
           ),
         ],
       ),
@@ -542,6 +715,41 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                   ),
                 ],
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallActionButton({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: color.withValues(alpha: .3),
+                width: 1,
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 16,
+              color: color,
             ),
           ),
         ),
@@ -639,75 +847,26 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                       ],
                     ),
                   )
-                : FutureBuilder(
-                    future: _future,
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snap.hasError) {
-                        return Center(child: Text('Error: ${snap.error}'));
-                      }
-                      final items = snap.data ?? [];
-                      if (items.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Iconsax.note_2,
-                                  size: 64, color: AppTheme.neutral500),
-                              const SizedBox(height: 16),
-                              const Text('Sin historias aún',
-                                  style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 8),
-                              const Text(
-                                  'Crea la primera historia médica para este paciente'),
-                              const SizedBox(height: 24),
-                              ElevatedButton.icon(
-                                onPressed: () => _openHistoryEditor(),
-                                icon: const Icon(Iconsax.add, size: 20),
-                                label: const Text('Crear Primera Historia'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primary500,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8)),
-                                ),
-                              ),
-                            ],
+                : _isLoadingHistories
+                    ? const Center(child: CircularProgressIndicator())
+                    : _cachedHistories.isNotEmpty
+                        ? _buildHistoriesList(_cachedHistories)
+                        : FutureBuilder(
+                            future: _future,
+                            builder: (context, snap) {
+                              if (snap.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                    child: CircularProgressIndicator());
+                              }
+                              if (snap.hasError) {
+                                return Center(
+                                    child: Text('Error: ${snap.error}'));
+                              }
+                              final items = snap.data ?? [];
+                              return _buildHistoriesList(items);
+                            },
                           ),
-                        );
-                      }
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.all(32), // p-8
-                        child: Column(
-                          children: [
-                            // Espaciado entre cards
-                            ...items.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final item = entry.value;
-                              return Column(
-                                children: [
-                                  _HistoryBlock(
-                                    data: item,
-                                    df: _df,
-                                    onEdit: () =>
-                                        _openHistoryEditor(record: item),
-                                  ),
-                                  if (index < items.length - 1)
-                                    const SizedBox(height: 24), // space-y-6
-                                ],
-                              );
-                            }).toList(),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
           ),
         ],
       ),
@@ -761,7 +920,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                 children: [
                                   Row(
                                     children: [
-                                      // Círculo para seleccionar imagen
+                                      // Círculo para seleccionar imagen de raza
                                       GestureDetector(
                                         onTap: () => _selectBreedImage(),
                                         child: Container(
@@ -769,15 +928,22 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                           height: 64,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: const Color(0xFF4F46E5)
-                                                .withValues(alpha: 0.1),
                                             border: Border.all(
                                                 color: const Color(0xFF4F46E5),
                                                 width: 2),
                                           ),
-                                          child: const Icon(Iconsax.pet,
-                                              size: 32,
-                                              color: Color(0xFF4F46E5)),
+                                          child: ClipOval(
+                                            child: DataService()
+                                                .buildBreedImageWidget(
+                                              breedId: patient['breed_id']
+                                                  ?.toString(),
+                                              species: patient['species']
+                                                  ?.toString(),
+                                              width: 64,
+                                              height: 64,
+                                              borderRadius: 32,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 16),
@@ -786,13 +952,47 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              patient['name'] ?? 'Sin nombre',
-                                              style: const TextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xFF1F2937),
-                                              ),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    patient['name'] ??
+                                                        'Sin nombre',
+                                                    style: const TextStyle(
+                                                      fontSize: 20,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Color(0xFF1F2937),
+                                                    ),
+                                                  ),
+                                                ),
+                                                // Botones de acción como iconos pequeños
+                                                Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    // Botón Editar
+                                                    _buildSmallActionButton(
+                                                      icon: Iconsax.edit,
+                                                      tooltip:
+                                                          'Editar Paciente',
+                                                      color: const Color(
+                                                          0xFF3B82F6),
+                                                      onTap: () =>
+                                                          _navigateToPatients(),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    // Botón Camada
+                                                    _buildSmallActionButton(
+                                                      icon: Iconsax.pet,
+                                                      tooltip: 'Crear Camada',
+                                                      color: Colors.orange,
+                                                      onTap: () =>
+                                                          _createLitter(),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
@@ -955,566 +1155,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }
 }
 
-/// Bloque de historia médica individual
-class _HistoryBlock extends StatefulWidget {
-  final Map<String, dynamic> data;
-  final DateFormat df;
-  final VoidCallback onEdit;
-
-  const _HistoryBlock(
-      {required this.data, required this.df, required this.onEdit});
-
-  @override
-  State<_HistoryBlock> createState() => _HistoryBlockState();
-}
-
-class _HistoryBlockState extends State<_HistoryBlock> {
-  late QuillController _summaryController;
-  late QuillController _contentDeltaController;
-  late TextEditingController _titleController;
-  bool _isEditing = false;
-  bool _isLocked = true; // Por defecto bloqueado
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeControllers();
-    // Por defecto bloqueado ya que no hay campo locked en la BD
-    _isLocked = true;
-  }
-
-  void _initializeControllers() {
-    // Inicializar controlador para summary
-    final summaryText = widget.data['summary']?.toString() ?? '';
-    List<dynamic> summaryDelta;
-    if (summaryText.isNotEmpty) {
-      summaryDelta = [
-        {'insert': summaryText.endsWith('\n') ? summaryText : '$summaryText\n'}
-      ];
-    } else {
-      summaryDelta = [
-        {'insert': '\n'}
-      ];
-    }
-    _summaryController = QuillController(
-      document: Document.fromJson(summaryDelta),
-      selection: const TextSelection.collapsed(offset: 0),
-    );
-
-    // Inicializar controlador para content_delta (acotaciones)
-    final contentDeltaText = widget.data['content_delta']?.toString() ?? '';
-    List<dynamic> contentDelta;
-    if (contentDeltaText.isNotEmpty) {
-      try {
-        // Intentar parsear como JSON primero
-        contentDelta = jsonDecode(contentDeltaText) as List;
-        if (contentDelta.isEmpty) {
-          contentDelta = [
-            {'insert': '\n'}
-          ];
-        }
-      } catch (e) {
-        // Si no es JSON válido, tratarlo como texto plano
-        contentDelta = [
-          {
-            'insert': contentDeltaText.endsWith('\n')
-                ? contentDeltaText
-                : '$contentDeltaText\n'
-          }
-        ];
-      }
-    } else {
-      contentDelta = [
-        {'insert': '\n'}
-      ];
-    }
-    _contentDeltaController = QuillController(
-      document: Document.fromJson(contentDelta),
-      selection: const TextSelection.collapsed(offset: 0),
-    );
-
-    // Inicializar controlador para título
-    _titleController = TextEditingController(
-      text: widget.data['title']?.toString() ?? 'Consulta de seguimiento',
-    );
-  }
-
-  @override
-  void dispose() {
-    _summaryController.dispose();
-    _contentDeltaController.dispose();
-    _titleController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _toggleLock() async {
-    final newLockState = !_isLocked;
-
-    try {
-      // Solo actualizar el estado local ya que no hay campo locked en la BD
-      setState(() {
-        _isLocked = newLockState;
-        // Si se desbloquea, automáticamente entrar en modo edición
-        // Si se bloquea, salir del modo edición
-        if (!newLockState) {
-          _isEditing = true;
-        } else {
-          _isEditing = false;
-        }
-      });
-
-      // Mostrar notificación de estado
-      if (mounted) {
-        NotificationService.showHistoryStatus(
-          newLockState
-              ? 'Historia bloqueada correctamente'
-              : 'Historia desbloqueada correctamente',
-          newLockState,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        NotificationService.showError('Error al cambiar el estado de bloqueo');
-      }
-    }
-  }
-
-  Future<void> _save() async {
-    try {
-      // Guardar el contenido del summary, content_delta y title
-      // Actualizar la fecha de modificación
-      await _supa.from('medical_records').update({
-        'title': _titleController.text.trim().isEmpty
-            ? null
-            : _titleController.text.trim(),
-        'summary': _summaryController.document.toPlainText().trim().isEmpty
-            ? null
-            : _summaryController.document.toPlainText().trim(),
-        'content_delta':
-            jsonEncode(_contentDeltaController.document.toDelta().toJson()),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', widget.data['id']);
-
-      setState(() {
-        _isEditing = false;
-        // Mantener el estado actual después de guardar
-      });
-
-      if (mounted) {
-        NotificationService.showSuccess('Historia guardada correctamente');
-      }
-    } catch (e) {
-      if (mounted) {
-        NotificationService.showError('Error al guardar la historia');
-      }
-    }
-  }
-
-  Widget _buildBlockActionButton({
-    required IconData icon,
-    required String tooltip,
-    required Color color,
-    VoidCallback? onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: .1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: color.withValues(alpha: .3),
-              ),
-            ),
-            child: Icon(
-              icon,
-              size: 16,
-              color: color,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _deleteBlock() {
-    // Mostrar diálogo de confirmación
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Eliminar Bloque'),
-          content: const Text(
-              '¿Estás seguro de que quieres eliminar este bloque de historia? Esta acción no se puede deshacer.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await _performDelete();
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFDC2626),
-              ),
-              child: const Text('Eliminar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _performDelete() async {
-    try {
-      await _supa.from('medical_records').delete().eq('id', widget.data['id']);
-
-      if (mounted) {
-        NotificationService.showSuccess('Bloque eliminado correctamente');
-        // Recargar la página principal
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        NotificationService.showError('Error al eliminar el bloque: $e');
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final date = widget.data['date']?.toString() ?? '';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white, // bg-card-light
-        borderRadius: BorderRadius.circular(16), // rounded-2xl
-        border: Border.all(color: const Color(0xFFE5E7EB)), // border-light
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header del bloque
-          Container(
-            padding: const EdgeInsets.all(16), // p-4
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                    color: Color(0xFFE5E7EB), width: 1), // border-light
-              ),
-            ),
-            child: Row(
-              children: [
-                // Fecha y autor
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        DateFormat('d MMMM y, hh:mm a', 'es')
-                            .format(DateTime.tryParse(date) ?? DateTime.now()),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1F2937), // text-light
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Autor: Dr. Smith',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF6B7280), // text-muted-light
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Badge de estado y botones de acción
-                Row(
-                  children: [
-                    // Badge de estado clickeable
-                    Tooltip(
-                      message: _isLocked
-                          ? 'Hacer clic para desbloquear y editar'
-                          : 'Hacer clic para bloquear',
-                      child: GestureDetector(
-                        onTap: _toggleLock,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _isLocked
-                                ? const Color(0xFFFEE2E2) // red-100
-                                : const Color(0xFFDCFCE7), // green-100
-                            borderRadius:
-                                BorderRadius.circular(20), // rounded-full
-                            border: Border.all(
-                              color: _isLocked
-                                  ? const Color(0xFFDC2626)
-                                      .withValues(alpha: 0.3)
-                                  : const Color(0xFF16A34A)
-                                      .withValues(alpha: 0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _isLocked ? Iconsax.lock : Iconsax.unlock,
-                                size: 12,
-                                color: _isLocked
-                                    ? const Color(0xFFDC2626) // red-700
-                                    : const Color(0xFF16A34A), // green-700
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _isLocked ? 'Bloqueado' : 'Editable',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: _isLocked
-                                      ? const Color(0xFFDC2626) // red-700
-                                      : const Color(0xFF16A34A), // green-700
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Botón para eliminar bloque
-                    _buildBlockActionButton(
-                      icon: Iconsax.trash,
-                      tooltip: 'Eliminar Bloque',
-                      color: const Color(0xFFDC2626),
-                      onTap: () => _deleteBlock(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Contenido del bloque
-          Padding(
-            padding: const EdgeInsets.all(16), // p-4
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Campo de título editable
-                if (_isEditing) ...[
-                  TextFormField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Título de la consulta',
-                      border: OutlineInputBorder(),
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1F2937),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ] else ...[
-                  Text(
-                    _titleController.text.isNotEmpty
-                        ? _titleController.text
-                        : 'Consulta de seguimiento',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1F2937),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // Campo de resumen (summary) editable
-                if (_isEditing) ...[
-                  const Text(
-                    'Resumen de la consulta',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: QuillEditor.basic(
-                      controller: _summaryController,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ] else ...[
-                  if (_summaryController.document
-                      .toPlainText()
-                      .trim()
-                      .isNotEmpty) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Text(
-                        _summaryController.document.toPlainText(),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1F2937),
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ],
-
-                // Campo de acotaciones (content_delta) editable
-                if (_isEditing) ...[
-                  const Text(
-                    'Acotaciones adicionales',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    height: 32, // Altura más pequeña
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: QuillEditor.basic(
-                      controller: _contentDeltaController,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      ElevatedButton(
-                        onPressed: _save,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4F46E5),
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('Guardar'),
-                      ),
-                      const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: () => setState(() => _isEditing = false),
-                        child: const Text('Cancelar'),
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  if (_contentDeltaController.document
-                      .toPlainText()
-                      .trim()
-                      .isNotEmpty) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Text(
-                        _contentDeltaController.document.toPlainText(),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1F2937),
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ],
-                // Zona de adjuntos solo si no está bloqueado
-                if (!_isLocked) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(24), // p-6
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFFD1D5DB), // gray-300
-                        style: BorderStyle.solid,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(12), // rounded-xl
-                    ),
-                    child: InkWell(
-                      onTap: () {
-                        // TODO: Implementar file picker
-                      },
-                      child: Container(
-                        alignment: Alignment.center,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Iconsax.cloud_add,
-                                size: 48, color: Color(0xFF9CA3AF)), // gray-400
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Arrastrar y soltar archivos aquí',
-                              style: TextStyle(
-                                  fontSize: 14, color: Color(0xFF6B7280)),
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'o haz clic para seleccionar',
-                              style: TextStyle(
-                                  fontSize: 12, color: Color(0xFF9CA3AF)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Editor de historias médicas
 class _HistoryEditor extends StatefulWidget {
   final String clinicId;
@@ -1540,7 +1180,7 @@ class _HistoryEditorState extends State<_HistoryEditor> {
     super.initState();
     _initializeController();
     _titleCtrl = TextEditingController(text: widget.record?['title'] ?? '');
-    _dxCtrl = TextEditingController(text: widget.record?['diagnosis'] ?? '');
+    _dxCtrl = TextEditingController(text: widget.record?['doctor'] ?? '');
     _dept = (widget.record?['department_code'] ?? 'MED').toString();
     _locked = widget.record?['locked'] == true;
     _date = DateTime.tryParse(widget.record?['date']?.toString() ?? '') ??
@@ -1548,27 +1188,8 @@ class _HistoryEditorState extends State<_HistoryEditor> {
   }
 
   void _initializeController() {
-    final initialDelta = widget.record?['content_delta']?.toString();
-    List<dynamic> deltaData;
-
-    if (initialDelta != null && initialDelta.isNotEmpty) {
-      try {
-        deltaData = jsonDecode(initialDelta) as List;
-        if (deltaData.isEmpty) {
-          deltaData = [
-            {'insert': '\n'}
-          ];
-        }
-      } catch (e) {
-        deltaData = [
-          {'insert': '\n'}
-        ];
-      }
-    } else {
-      deltaData = [
-        {'insert': '\n'}
-      ];
-    }
+    // Usar DataService para limpiar el contenido Delta
+    final deltaData = DataService.cleanDelta(widget.record?['content_delta']);
 
     _controller = QuillController(
       document: Document.fromJson(deltaData),
@@ -1585,15 +1206,17 @@ class _HistoryEditorState extends State<_HistoryEditor> {
   }
 
   Future<void> _save() async {
+    // Usar DataService para obtener el texto plano del contenido
+    final summaryText =
+        DataService.getPlainText(_controller.document.toDelta().toJson());
+
     final payload = {
       'clinic_id': widget.clinicId,
       'patient_id': widget.mrn,
       'date': _date.toIso8601String().substring(0, 10),
       'title': _titleCtrl.text.isEmpty ? null : _titleCtrl.text,
-      'summary': _controller.document.toPlainText().trim().isEmpty
-          ? null
-          : _controller.document.toPlainText().trim(),
-      'diagnosis': _dxCtrl.text.isEmpty ? null : _dxCtrl.text,
+      'summary': summaryText.isEmpty ? null : summaryText,
+      'doctor': _dxCtrl.text.isEmpty ? null : _dxCtrl.text,
       'department_code': _dept,
       'locked': _locked,
       'content_delta': jsonEncode(_controller.document.toDelta().toJson()),
@@ -1611,6 +1234,7 @@ class _HistoryEditorState extends State<_HistoryEditor> {
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
+      print('Error al guardar en editor: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al guardar: $e')),

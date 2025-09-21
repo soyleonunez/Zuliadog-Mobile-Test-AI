@@ -3,6 +3,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:zuliadog/core/navigation.dart';
 import 'package:zuliadog/features/data/buscador.dart';
 import 'package:zuliadog/features/data/repository.dart';
+import 'package:zuliadog/features/data/data_service.dart';
 import 'package:zuliadog/features/menu.dart';
 import 'package:zuliadog/features/utilities/visor.dart';
 import 'package:zuliadog/features/utilities/historias.dart';
@@ -505,31 +506,13 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            // Avatar con especie
-            Container(
+            // Avatar con imagen de raza o fallback por especie
+            DataService().buildBreedImageWidget(
+              breedId: patient.breedId,
+              species: patient.species,
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    _getSpeciesColor(patient.species ?? '').withOpacity(0.1),
-                    _getSpeciesColor(patient.species ?? '').withOpacity(0.2),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text(
-                  patient.patientName.isNotEmpty
-                      ? patient.patientName[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(
-                    color: _getSpeciesColor(patient.species ?? ''),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
+              borderRadius: 12,
             ),
             const SizedBox(width: 10),
 

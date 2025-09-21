@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Modelo de fila devuelta por la vista `patients_search`
 /// Asegúrate de que la vista tenga estas columnas:
 /// patient_id, clinic_id, patient_name, history_number, mrn_int,
-/// owner_name, owner_phone, owner_email, species_label, breed_label, sex
+/// owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex
 class PatientSearchRow {
   final String patientId;
   final String clinicId;
@@ -18,6 +18,7 @@ class PatientSearchRow {
   final String? ownerEmail;
   final String? species;
   final String? breed;
+  final String? breedId; // ID de la raza para obtener imagen
   final String? sex;
 
   PatientSearchRow({
@@ -31,6 +32,7 @@ class PatientSearchRow {
     required this.ownerEmail,
     required this.species,
     required this.breed,
+    required this.breedId,
     required this.sex,
   });
 
@@ -46,6 +48,7 @@ class PatientSearchRow {
       ownerEmail: j['owner_email'] as String?,
       species: j['species_label'] as String?,
       breed: j['breed_label'] as String?,
+      breedId: j['breed_id'] as String?,
       sex: j['sex'] as String?,
     );
   }
@@ -62,7 +65,7 @@ class SearchRepository {
     final baseSel = _db.from('patients_search').select(
       '''
       patient_id, clinic_id, patient_name, history_number, mrn_int,
-      owner_name, owner_phone, owner_email, species_label, breed_label, sex
+      owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex
       ''',
     );
 

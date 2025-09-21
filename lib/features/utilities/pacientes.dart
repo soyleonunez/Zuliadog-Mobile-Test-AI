@@ -42,7 +42,11 @@ class _PatientsPageState extends State<PatientsPage> {
     return List<Map<String, dynamic>>.from(resp);
   }
 
-  void _reload() => setState(() => _future = _fetch());
+  void _reload() {
+    setState(() {
+      _future = _fetch();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
