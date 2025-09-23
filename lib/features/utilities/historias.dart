@@ -13,11 +13,13 @@ class HistoriasPage extends StatefulWidget {
   static const String route = '/historias';
 
   final String? patientId;
+  final String? mrn; // Agregar soporte para MRN
   final String authorName;
 
   const HistoriasPage({
     super.key,
     this.patientId,
+    this.mrn,
     this.authorName = 'Veterinaria',
   });
 
@@ -33,7 +35,7 @@ class _HistoriasPageState extends State<HistoriasPage> {
   void initState() {
     super.initState();
     _initializeDateFormatting();
-    _selectedPatientId = widget.patientId;
+    _selectedPatientId = widget.patientId ?? widget.mrn;
   }
 
   Future<void> _initializeDateFormatting() async {

@@ -13,6 +13,7 @@ import 'package:zuliadog/features/utilities/recursos.dart';
 import 'package:zuliadog/features/utilities/tickets.dart';
 import 'package:zuliadog/features/utilities/reportes.dart';
 import 'package:zuliadog/auth/service.dart';
+import 'package:zuliadog/auth/login.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,7 +61,7 @@ class ZuliadogApp extends StatelessWidget {
         Locale('es', 'ES'), // Español
         Locale('en', 'US'), // Inglés
       ],
-      home: const HomeScreen(),
+      home: const WelcomeScreen(),
       routes: {
         '/home': (context) => const HomeScreen(),
         VisorMedicoPage.route: (context) => const VisorMedicoPage(),

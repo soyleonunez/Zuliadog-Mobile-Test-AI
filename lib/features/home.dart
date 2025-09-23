@@ -32,7 +32,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool loading = true;
   bool useRealChart =
       false; // reemplaza placeholder cuando integres tu librería de charts
@@ -47,6 +47,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Repositorio de datos
   final DataRepository _repository = DataRepository();
+
+  // Controladores de animación (para futuras implementaciones)
+  // late AnimationController _quickActionController;
+  // late AnimationController _topBarController;
 
   @override
   void initState() {
@@ -745,7 +749,7 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _TopBarButton extends StatelessWidget {
+class _TopBarButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final String? badge;
@@ -759,46 +763,89 @@ class _TopBarButton extends StatelessWidget {
   });
 
   @override
+  State<_TopBarButton> createState() => _TopBarButtonState();
+}
+
+class _TopBarButtonState extends State<_TopBarButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.9).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTap() async {
+    await _controller.forward();
+    await _controller.reverse();
+    widget.onPressed();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        IconButton(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 20),
-          tooltip: tooltip,
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.neutral50,
-            foregroundColor: AppColors.neutral700,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            minimumSize: const Size(40, 40),
-            padding: EdgeInsets.zero,
-          ),
-        ),
-        if (badge != null)
-          Positioned(
-            right: 6,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: const BoxDecoration(
-                color: AppColors.danger500,
-                shape: BoxShape.circle,
-              ),
-              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-              child: Text(
-                badge!,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scale.value,
+          child: Stack(
+            children: [
+              IconButton(
+                onPressed: _handleTap,
+                icon: Icon(widget.icon, size: 20),
+                tooltip: widget.tooltip,
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.neutral50,
+                  foregroundColor: AppColors.neutral700,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  minimumSize: const Size(40, 40),
+                  padding: EdgeInsets.zero,
                 ),
-                textAlign: TextAlign.center,
               ),
-            ),
+              if (widget.badge != null)
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: const BoxDecoration(
+                      color: AppColors.danger500,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      widget.badge!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
           ),
-      ],
+        );
+      },
     );
   }
 }
@@ -877,42 +924,86 @@ class _QuickAction {
   });
 }
 
-class _QuickActionButton extends StatelessWidget {
+class _QuickActionButton extends StatefulWidget {
   final _QuickAction action;
 
   const _QuickActionButton({required this.action});
 
   @override
+  State<_QuickActionButton> createState() => _QuickActionButtonState();
+}
+
+class _QuickActionButtonState extends State<_QuickActionButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTap() async {
+    await _controller.forward();
+    await _controller.reverse();
+    widget.action.onTap();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: action.onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: action.color.withOpacity(.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: action.color.withOpacity(.2)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(action.icon, size: 14, color: action.color),
-              const SizedBox(width: 4),
-              Text(
-                action.label,
-                style: AppText.label.copyWith(
-                  color: action.color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scale.value,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _handleTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: widget.action.color.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border:
+                      Border.all(color: widget.action.color.withOpacity(.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(widget.action.icon,
+                        size: 14, color: widget.action.color),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.action.label,
+                      style: AppText.label.copyWith(
+                        color: widget.action.color,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

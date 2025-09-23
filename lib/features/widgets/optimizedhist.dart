@@ -274,37 +274,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     }
   }
 
-  void _createNewPatient() {
-    try {
-      showModalBottomSheet<Map<String, dynamic>>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.white,
-        builder: (BuildContext context) => _NewPatientForm(
-          clinicId: widget.clinicId,
-        ),
-      ).then((result) {
-        if (mounted && result != null) {
-          // Actualizar la lista de pacientes y seleccionar el nuevo
-          setState(() {
-            _currentMrn = result['mrn'];
-            _loadData();
-          });
-          NotificationService.showSuccess('Paciente creado correctamente');
-        }
-      }).catchError((error) {
-        if (mounted) {
-          NotificationService.showError('Error al crear paciente: $error');
-        }
-      });
-    } catch (e) {
-      if (mounted) {
-        NotificationService.showError('Error al crear paciente: $e');
-      }
-    }
-  }
-
   void _createLitter() {
     // TODO: Implementar creación de camada
     ScaffoldMessenger.of(context).showSnackBar(
@@ -327,11 +296,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   void _exportToPDF() {
     // TODO: Implementar exportación a PDF
     NotificationService.showInfo('Exportar a PDF (pendiente)');
-  }
-
-  void _editPatient() {
-    // TODO: Implementar edición de paciente
-    NotificationService.showInfo('Editar Paciente (pendiente)');
   }
 
   /// Elimina una historia del cache local de manera eficiente
@@ -677,45 +641,41 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }) {
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
+      child: _AnimatedButton(
+        onTap: onTap ?? () {},
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: onTap != null
+                ? color.withValues(alpha: .1)
+                : const Color(0xFFE5E7EB).withValues(alpha: .5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
               color: onTap != null
-                  ? color.withValues(alpha: .1)
-                  : const Color(0xFFE5E7EB).withValues(alpha: .5),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: onTap != null
-                    ? color.withValues(alpha: .3)
-                    : const Color(0xFF6B7280).withValues(alpha: .3),
+                  ? color.withValues(alpha: .3)
+                  : const Color(0xFF6B7280).withValues(alpha: .3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: onTap != null ? color : const Color(0xFF6B7280),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: onTap != null ? color : const Color(0xFF6B7280),
-                ),
-                if (text != null) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    text,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: onTap != null ? color : const Color(0xFF6B7280),
-                    ),
+              if (text != null) ...[
+                const SizedBox(width: 6),
+                Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: onTap != null ? color : const Color(0xFF6B7280),
                   ),
-                ],
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),
@@ -730,27 +690,23 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }) {
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: .1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: color.withValues(alpha: .3),
-                width: 1,
-              ),
+      child: _AnimatedButton(
+        onTap: onTap,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: color.withValues(alpha: .3),
+              width: 1,
             ),
-            child: Icon(
-              icon,
-              size: 16,
-              color: color,
-            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: color,
           ),
         ),
       ),
@@ -1734,6 +1690,70 @@ class _NewPatientFormState extends State<_NewPatientForm> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Widget de botón animado reutilizable
+class _AnimatedButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _AnimatedButton({
+    required this.onTap,
+    required this.child,
+  });
+
+  @override
+  State<_AnimatedButton> createState() => _AnimatedButtonState();
+}
+
+class _AnimatedButtonState extends State<_AnimatedButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTap() async {
+    await _controller.forward();
+    await _controller.reverse();
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scale.value,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _handleTap,
+              borderRadius: BorderRadius.circular(8),
+              child: widget.child,
+            ),
+          ),
+        );
+      },
     );
   }
 }

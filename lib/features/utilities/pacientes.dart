@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:iconsax/iconsax.dart';
 import '../data/data_service.dart';
-import '../widgets/optimizedhist.dart';
 import '../menu.dart';
 import '../../core/navigation.dart';
 
@@ -286,33 +285,29 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            border: Border.all(color: color.withOpacity(0.3)),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 8),
-              Text(
-                text,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: color,
-                ),
+    return _AnimatedButton(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          border: Border.all(color: color.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 8),
+            Text(
+              text,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: color,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -821,14 +816,10 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
           tooltip: 'Historia Médica',
           color: const Color(0xFF4F46E5),
           onTap: () {
-            Navigator.push(
+            Navigator.pushNamed(
               context,
-              MaterialPageRoute(
-                builder: (context) => OptimizedHistoriasPage(
-                  clinicId: _clinicId,
-                  mrn: row.mrn,
-                ),
-              ),
+              '/historias',
+              arguments: {'mrn': row.mrn},
             );
           },
         ),
@@ -874,27 +865,23 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
   }) {
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: color.withOpacity(0.3),
-                width: 1,
-              ),
+      child: _AnimatedButton(
+        onTap: onTap,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: color.withOpacity(0.3),
+              width: 1,
             ),
-            child: Icon(
-              icon,
-              size: 16,
-              color: color,
-            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: color,
           ),
         ),
       ),
@@ -947,28 +934,27 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
   Widget _buildPageButton(int page, bool isSelected) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
-      child: Material(
-        color: isSelected
-            ? const Color(0xFF4F46E5).withOpacity(0.1)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-        child: InkWell(
-          onTap: () {
-            setState(() => _pageIndex = page - 1);
-            _loadPage();
-          },
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Text(
-              page.toString(),
-              style: TextStyle(
-                fontSize: 14,
-                color: isSelected
-                    ? const Color(0xFF4F46E5)
-                    : const Color(0xFF6B7280),
-                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-              ),
+      child: _AnimatedButton(
+        onTap: () {
+          setState(() => _pageIndex = page - 1);
+          _loadPage();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF4F46E5).withOpacity(0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            page.toString(),
+            style: TextStyle(
+              fontSize: 14,
+              color: isSelected
+                  ? const Color(0xFF4F46E5)
+                  : const Color(0xFF6B7280),
+              fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
             ),
           ),
         ),
@@ -1199,6 +1185,70 @@ class _StatusPill extends StatelessWidget {
                   color: color, fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
+    );
+  }
+}
+
+/// Widget de botón animado reutilizable
+class _AnimatedButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _AnimatedButton({
+    required this.onTap,
+    required this.child,
+  });
+
+  @override
+  State<_AnimatedButton> createState() => _AnimatedButtonState();
+}
+
+class _AnimatedButtonState extends State<_AnimatedButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTap() async {
+    await _controller.forward();
+    await _controller.reverse();
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scale.value,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _handleTap,
+              borderRadius: BorderRadius.circular(8),
+              child: widget.child,
+            ),
+          ),
+        );
+      },
     );
   }
 }
