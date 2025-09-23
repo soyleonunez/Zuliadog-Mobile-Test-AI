@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:zuliadog/auth/login.dart';
 
 enum UserRole { doctor, admin }
 
@@ -242,12 +243,83 @@ class AppSidebar extends StatelessWidget {
     }
   }
 
+  // Función para mostrar diálogo de confirmación de cierre de sesión
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.danger500.withOpacity(0.1),
+                ),
+                child: const Icon(
+                  Iconsax.logout,
+                  size: 16,
+                  color: AppColors.danger500,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text('Cerrar sesión'),
+            ],
+          ),
+          content: const Text(
+            '¿Estás seguro de que deseas cerrar sesión?',
+            style: TextStyle(fontSize: 15),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.neutral500),
+              ),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _performLogout(context);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.danger500,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Cerrar sesión'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Función para realizar el cierre de sesión
+  void _performLogout(BuildContext context) {
+    // Navegar a la pantalla de login
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => const WelcomeScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = visibleMenu(userRole);
 
     return Container(
       width: 260,
+      height: MediaQuery.of(context).size.height,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -345,7 +417,7 @@ class AppSidebar extends StatelessWidget {
 
           // Usuario en la parte inferior
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
             decoration: BoxDecoration(
               color: AppColors.neutral50,
               border: const Border(
@@ -370,10 +442,27 @@ class AppSidebar extends StatelessWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () {},
+                PopupMenuButton<String>(
                   icon: const Icon(Iconsax.more_2, size: 18),
                   tooltip: 'Menú de usuario',
+                  onSelected: (value) {
+                    if (value == 'logout') {
+                      _showLogoutDialog(context);
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem<String>(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(Iconsax.logout,
+                              size: 16, color: AppColors.danger500),
+                          SizedBox(width: 8),
+                          Text('Cerrar sesión'),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:zuliadog/features/home.dart';
+import 'login.dart';
 
 class DepartmentLoginScreen extends StatefulWidget {
   const DepartmentLoginScreen({super.key});
@@ -10,9 +12,8 @@ class DepartmentLoginScreen extends StatefulWidget {
 }
 
 class _DepartmentLoginScreenState extends State<DepartmentLoginScreen> {
-  String? selectedRole;
-  String? selectedUser;
   bool isLoading = false;
+  String? loadingRole;
 
   // Datos de roles y usuarios predefinidos (sin owner)
   final List<Map<String, dynamic>> clinicRoles = [
@@ -86,19 +87,10 @@ class _DepartmentLoginScreenState extends State<DepartmentLoginScreen> {
     'lab': const Color(0xFF06B6D4), // Cyan
   };
 
-  void _login() async {
-    if (selectedRole == null || selectedUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor selecciona un departamento'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
+  void _login(String role) async {
     setState(() {
       isLoading = true;
+      loadingRole = role;
     });
 
     // Simular proceso de login
@@ -106,6 +98,7 @@ class _DepartmentLoginScreenState extends State<DepartmentLoginScreen> {
 
     setState(() {
       isLoading = false;
+      loadingRole = null;
     });
 
     // Navegar a la pantalla principal
@@ -123,150 +116,206 @@ class _DepartmentLoginScreenState extends State<DepartmentLoginScreen> {
     final t = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Iniciar Sesión'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Iconsax.arrow_left_2),
-          onPressed: () => Navigator.of(context).pop(),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('Assets/Images/Fondo.png'),
+            fit: BoxFit.cover,
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 800),
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Título
-                Text(
-                  'Selecciona tu Departamento',
-                  style: t.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Contenido principal
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withOpacity(0.7),
+                        Colors.white.withOpacity(0.5),
+                        Colors.white.withOpacity(0.6),
+                      ],
+                    ),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Elige el rol con el que deseas ingresar',
-                  style: t.bodyLarge?.copyWith(color: Colors.grey[600]),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Logo SVG centrado
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.1),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: SvgPicture.asset(
+                                'Assets/Icon/appicon.svg',
+                                width: 80,
+                                height: 80,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 32),
 
-                // Cards de departamentos
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  alignment: WrapAlignment.center,
-                  children: clinicRoles
-                      .map((user) => user['role'])
-                      .toSet()
-                      .map((role) => _buildDepartmentCard(role))
-                      .toList(),
+                          // Título
+                          Text(
+                            'Selecciona tu Departamento',
+                            style: t.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[800],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Elige el rol con el que deseas ingresar',
+                            style: t.bodyLarge?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 48),
+
+                          // Cards de departamentos
+                          Wrap(
+                            spacing: 16,
+                            runSpacing: 16,
+                            alignment: WrapAlignment.center,
+                            children: clinicRoles
+                                .map((user) => user['role'])
+                                .toSet()
+                                .map((role) => _buildDepartmentCard(role))
+                                .toList(),
+                          ),
+
+                          const SizedBox(height: 48),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-
-                const SizedBox(height: 48),
-
-                // Botón de login moderno
-                if (selectedRole != null) ...[
-                  _buildLoginButton(),
-                ],
-              ],
-            ),
+              ),
+              // Botón de atrás flotante (al final para estar encima)
+              Positioned(
+                top: 16,
+                left: 16,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      print('Botón presionado');
+                      Navigator.of(context).pushAndRemoveUntil(
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const WelcomeScreen(),
+                          transitionDuration: Duration.zero,
+                          reverseTransitionDuration: Duration.zero,
+                        ),
+                        (route) => false,
+                      );
+                    },
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildLoginButton() {
-    return SizedBox(
-      width: 200,
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        onPressed: isLoading ? null : _login,
-        icon: isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Icon(Iconsax.arrow_right_3),
-        label: Text(isLoading ? 'Ingresando...' : 'Ingresar'),
       ),
     );
   }
 
   Widget _buildDepartmentCard(String role) {
-    final isSelected = selectedRole == role;
     final color = roleColors[role]!;
     final icon = roleIcons[role]!;
     final name = roleNames[role]!;
+    final isThisRoleLoading = loadingRole == role;
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          selectedRole = role;
-          selectedUser =
-              clinicRoles.firstWhere((user) => user['role'] == role)['user_id'];
-        });
-      },
+      onTap: isLoading ? null : () => _login(role),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: 160,
-        height: 120,
+        height: 140,
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
+          color: isThisRoleLoading
+              ? color.withOpacity(0.3)
+              : color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? color : Colors.grey[300]!,
-            width: isSelected ? 2 : 1,
+            color: isThisRoleLoading ? color : color.withOpacity(0.3),
+            width: isThisRoleLoading ? 2 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: isSelected
-                  ? color.withOpacity(0.2)
-                  : Colors.grey.withOpacity(0.1),
-              blurRadius: isSelected ? 8 : 4,
-              offset: const Offset(0, 2),
+              color: isThisRoleLoading
+                  ? color.withOpacity(0.4)
+                  : color.withOpacity(0.2),
+              blurRadius: isThisRoleLoading ? 12 : 8,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: isSelected ? color : color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: isSelected ? Colors.white : color,
-                size: 24,
-              ),
-            ),
+            isThisRoleLoading
+                ? SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    color: color,
+                    size: 32,
+                  ),
             const SizedBox(height: 12),
             Text(
-              name,
+              isThisRoleLoading ? 'Ingresando...' : name,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: isSelected ? color : Colors.grey[700],
+                color: Colors.grey[800],
                 fontSize: 14,
               ),
               textAlign: TextAlign.center,
@@ -275,7 +324,7 @@ class _DepartmentLoginScreenState extends State<DepartmentLoginScreen> {
             Text(
               'Zuliadog',
               style: TextStyle(
-                color: Colors.grey[500],
+                color: Colors.grey[600],
                 fontSize: 12,
               ),
             ),

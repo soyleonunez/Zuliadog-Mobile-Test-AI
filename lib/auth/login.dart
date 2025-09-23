@@ -46,24 +46,26 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   void _goToLogin(BuildContext context) async {
-    await _buttonController.forward();
-    await _buttonController.reverse();
     if (mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const DepartmentLoginScreen(),
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const DepartmentLoginScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
         ),
       );
     }
   }
 
   void _goToTutorial(BuildContext context) async {
-    await _tutorialController.forward();
-    await _tutorialController.reverse();
     if (mounted) {
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const TutorialScreen(),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const TutorialScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
         ),
       );
     }
@@ -90,7 +92,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             // CONTENIDO PRINCIPAL - POSICIONAMIENTO DESDE ABAJO
             Positioned(
               bottom:
-                  145, // PADDING INFERIOR: Cambia este valor para subir/bajar el contenido
+                  138, // PADDING INFERIOR: Cambia este valor para subir/bajar el contenido
               left: 0,
               right: 0,
               child: Column(
