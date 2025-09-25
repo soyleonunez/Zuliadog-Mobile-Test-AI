@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../menu.dart';
+import '../home.dart' as home;
 import '../../core/navigation.dart';
+import 'hospitalizacion.dart';
 
 class TicketsPage extends StatelessWidget {
   const TicketsPage({super.key});
@@ -11,18 +13,18 @@ class TicketsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Theme(
       data: Theme.of(context).copyWith(
-        focusColor: AppColors.primary500.withOpacity(.12),
-        hoverColor: AppColors.neutral50,
-        splashColor: AppColors.primary500.withOpacity(.08),
+        focusColor: home.AppColors.primary500.withOpacity(.12),
+        hoverColor: home.AppColors.neutral50,
+        splashColor: home.AppColors.primary500.withOpacity(.08),
         colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.primary500,
-              secondary: AppColors.primary600,
+              primary: home.AppColors.primary500,
+              secondary: home.AppColors.primary600,
               surface: Colors.white,
-              onSurface: AppColors.neutral900,
+              onSurface: home.AppColors.neutral900,
             ),
       ),
       child: Scaffold(
-        backgroundColor: AppColors.neutral50,
+        backgroundColor: home.AppColors.neutral50,
         body: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -35,7 +37,7 @@ class TicketsPage extends StatelessWidget {
               child: Column(
                 children: [
                   _TopBar(title: 'Tickets'),
-                  const Divider(height: 1, color: AppColors.neutral200),
+                  const Divider(height: 1, color: home.AppColors.neutral200),
                   Expanded(
                     child: Center(
                       child: Column(
@@ -44,20 +46,20 @@ class TicketsPage extends StatelessWidget {
                           Icon(
                             Icons.receipt,
                             size: 64,
-                            color: AppColors.neutral400,
+                            color: home.AppColors.neutral400,
                           ),
                           const SizedBox(height: 16),
                           Text(
                             'Sistema de Tickets',
-                            style: AppText.titleL.copyWith(
-                              color: AppColors.neutral700,
+                            style: home.AppText.titleL.copyWith(
+                              color: home.AppColors.neutral700,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'Gestiona tickets y soporte técnico',
-                            style: AppText.bodyM.copyWith(
-                              color: AppColors.neutral500,
+                            style: home.AppText.bodyM.copyWith(
+                              color: home.AppColors.neutral500,
                             ),
                           ),
                         ],
@@ -97,8 +99,8 @@ class TicketsPage extends StatelessWidget {
         case 'frame_agenda':
           routePath = '/agenda';
           break;
-        case 'frame_visor_medico':
-          routePath = '/visor-medico';
+        case 'frame_hospitalizacion':
+          routePath = HospitalizacionPage.route;
           break;
         case 'frame_recursos':
           routePath = '/recursos';
@@ -127,15 +129,15 @@ class _TopBar extends StatelessWidget {
         decoration: const BoxDecoration(
           color: Colors.white,
           border: Border(
-            bottom: BorderSide(color: AppColors.neutral200, width: 1),
+            bottom: BorderSide(color: home.AppColors.neutral200, width: 1),
           ),
         ),
         child: Row(
           children: [
             Text(
               title,
-              style: AppText.titleM.copyWith(
-                color: AppColors.neutral900,
+              style: home.AppText.titleM.copyWith(
+                color: home.AppColors.neutral900,
                 fontWeight: FontWeight.w600,
               ),
             ),

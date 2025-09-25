@@ -9,6 +9,7 @@ import 'package:zuliadog/features/utilities/historias.dart';
 import 'package:zuliadog/features/utilities/recetas.dart';
 import 'package:zuliadog/features/utilities/laboratorio.dart';
 import 'package:zuliadog/features/utilities/agenda.dart';
+import 'package:zuliadog/features/utilities/hospitalizacion.dart';
 import 'package:zuliadog/features/utilities/recursos.dart';
 import 'package:zuliadog/features/utilities/tickets.dart';
 import 'package:zuliadog/features/utilities/reportes.dart';
@@ -66,10 +67,21 @@ class ZuliadogApp extends StatelessWidget {
         '/home': (context) => const HomeScreen(),
         VisorMedicoPage.route: (context) => const VisorMedicoPage(),
         '/pacientes': (context) => const PatientsDashboardPage(),
-        HistoriasPage.route: (context) => const HistoriasPage(),
+        HistoriasPage.route: (context) {
+          final args = ModalRoute.of(context)?.settings.arguments
+              as Map<String, dynamic>?;
+          print('🔍 main.dart - args recibidos: $args');
+          print('🔍 main.dart - patient_id: ${args?['patient_id']}');
+          print('🔍 main.dart - mrn: ${args?['mrn']}');
+          return HistoriasPage(
+            patientId: args?['patient_id'],
+            mrn: args?['mrn'],
+          );
+        },
         RecetasPage.route: (context) => const RecetasPage(),
         LaboratorioPage.route: (context) => const LaboratorioPage(),
         AgendaPage.route: (context) => const AgendaPage(),
+        HospitalizacionPage.route: (context) => const HospitalizacionPage(),
         RecursosPage.route: (context) => const RecursosPage(),
         TicketsPage.route: (context) => const TicketsPage(),
         ReportesPage.route: (context) => const ReportesPage(),

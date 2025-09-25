@@ -398,41 +398,59 @@ class Repository {
 class DataRepository {
   final SupabaseClient _db = Supabase.instance.client;
 
-  /// Busca pacientes por múltiples criterios usando patients_search
+  /// Busca pacientes por múltiples criterios usando v_app
   Future<List<PatientSearchRow>> searchPatients(String query,
       {int limit = 30}) async {
     final q = query.trim();
     final isNumeric = int.tryParse(q.replaceAll(RegExp(r'\D'), '')) != null;
 
-    final baseSel = _db.from('patients_search').select(
-      '''
-      patient_id, clinic_id, patient_name, history_number, mrn_int,
-      owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex
-      ''',
-    );
+    final baseSel = _db.from('v_app').select('*');
 
     if (q.isEmpty) {
       // Lista inicial: algunos pacientes ordenados por nombre
       final rows =
           await baseSel.order('patient_name', ascending: true).limit(limit);
-      return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
+
+      // Agrupar por patient_id para evitar duplicados
+      final Map<String, Map<String, dynamic>> uniquePatients = {};
+      for (final record in rows) {
+        final patientId = record['patient_id'] ?? record['patient_uuid'];
+        if (patientId != null && !uniquePatients.containsKey(patientId)) {
+          uniquePatients[patientId] = record;
+        }
+      }
+
+      return uniquePatients.values
+          .map((e) => PatientSearchRow.fromJson(e))
+          .toList();
     }
 
-    // Búsqueda con OR compuesto
+    // Búsqueda con OR compuesto para v_app
     final ors = <String>[
       "patient_name.ilike.%$q%",
+      "patient_mrn.ilike.%$q%",
       "owner_name.ilike.%$q%",
-      "history_number.eq.$q",
-      if (isNumeric)
-        "mrn_int.eq.${int.parse(q.replaceAll(RegExp(r'\\D'), ''))}",
+      "record_title.ilike.%$q%",
+      if (isNumeric) "patient_mrn.eq.$q",
     ];
 
     final rows = await baseSel
         .or(ors.join(','))
-        .order('mrn_int', ascending: true, nullsFirst: true)
+        .order('patient_mrn', ascending: true, nullsFirst: true)
         .limit(limit);
 
-    return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
+    // Agrupar por patient_id para evitar duplicados
+    final Map<String, Map<String, dynamic>> uniquePatients = {};
+    for (final record in rows) {
+      final patientId = record['patient_id'] ?? record['patient_uuid'];
+      if (patientId != null && !uniquePatients.containsKey(patientId)) {
+        uniquePatients[patientId] = record;
+      }
+    }
+
+    return uniquePatients.values
+        .map((e) => PatientSearchRow.fromJson(e))
+        .toList();
   }
 
   /// Obtiene estadísticas del dashboard

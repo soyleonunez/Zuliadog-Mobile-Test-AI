@@ -86,7 +86,7 @@ class _TextEditorState extends State<TextEditor> {
     print(
         '🔍 TextEditor - is_new: ${widget.data['is_new']} (type: ${widget.data['is_new'].runtimeType})');
     print('🔍 TextEditor - data keys: ${widget.data.keys.toList()}');
-    print('🔍 TextEditor - is_new == true: ${widget.data['is_new'] == true}');
+    
 
     // Inicializar controlador para summary usando DataService
     final summaryDelta = widget.data['is_new'] == true
@@ -116,13 +116,13 @@ class _TextEditorState extends State<TextEditor> {
             ? 'Escribe el título de la consulta...'
             : '');
     _titleController = TextEditingController(text: titleText);
-    print('🔍 TextEditor - title text: "$titleText"');
+    
 
     // Inicializar controlador para médico
     final doctorText = widget.data['doctor']?.toString() ??
         (widget.data['is_new'] == true ? 'Nombre del médico...' : '');
     _doctorController = TextEditingController(text: doctorText);
-    print('🔍 TextEditor - doctor text: "$doctorText"');
+    
   }
 
   @override
@@ -184,7 +184,7 @@ class _TextEditorState extends State<TextEditor> {
       // Actualizar el widget.data también
       widget.data['locked'] = locked;
     } catch (e) {
-      print('Error al actualizar estado de bloqueo: $e');
+      
     }
   }
 
@@ -265,7 +265,7 @@ class _TextEditorState extends State<TextEditor> {
         _isLoadingAttachments = false;
       });
     } catch (e) {
-      print('Error al cargar archivos adjuntos: $e');
+      
       setState(() {
         _isLoadingAttachments = false;
       });
@@ -303,6 +303,12 @@ class _TextEditorState extends State<TextEditor> {
       // Subir cada archivo a Supabase Storage
       for (final file in _selectedFiles) {
         try {
+          // Verificar que el archivo tenga bytes
+          if (file.bytes == null) {
+            
+            continue;
+          }
+
           // Generar nombre único para el archivo
           final fileName =
               '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
@@ -325,7 +331,7 @@ class _TextEditorState extends State<TextEditor> {
             'uploaded_at': DateTime.now().toIso8601String(),
           });
         } catch (e) {
-          print('Error al subir archivo ${file.name}: $e');
+          
         }
       }
 
@@ -471,9 +477,9 @@ class _TextEditorState extends State<TextEditor> {
 
       // Verificar si es un bloque nuevo (ID temporal)
       final isNewBlock = widget.recordId.startsWith('temp_');
-      print('🔍 _save - isNewBlock: $isNewBlock');
-      print('🔍 _save - recordId: ${widget.recordId}');
-      print('🔍 _save - saveData: $saveData');
+      
+      
+      
 
       if (isNewBlock) {
         // Es un bloque nuevo, crear en la base de datos
@@ -506,9 +512,9 @@ class _TextEditorState extends State<TextEditor> {
         }
 
         // Debug: verificar tipos de datos
-        print('🔍 _save - tipos de datos:');
+        
         saveData.forEach((key, value) {
-          print('  $key: ${value.runtimeType} = $value');
+          
         });
 
         print(
@@ -520,14 +526,14 @@ class _TextEditorState extends State<TextEditor> {
             .select('id')
             .single();
 
-        print('🔍 _save - respuesta de insert: $response');
+        
 
         // Actualizar el ID temporal con el ID real de la base de datos
         widget.data['id'] = response['id'];
         widget.data.remove('is_new'); // Remover la marca de nuevo
         widget.data.remove('is_temp'); // Remover la marca de temporal
 
-        print('🔍 _save - widget.data actualizado: ${widget.data}');
+        
       } else {
         // Es un bloque existente, actualizar
         // Asegurar que locked sea string para actualizaciones también
@@ -553,7 +559,7 @@ class _TextEditorState extends State<TextEditor> {
         }
       }
     } catch (e) {
-      print('Error al guardar historia: $e');
+      
       if (mounted) {
         NotificationService.showError('Error al guardar la historia: $e');
       }
@@ -913,7 +919,7 @@ class _TextEditorState extends State<TextEditor> {
                 // Campo de resumen (summary) editable
                 if (_isEditing) ...[
                   const Text(
-                    'Motivo de la consulta',
+                    'Motivo de la consulta / Resumen',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -941,6 +947,15 @@ class _TextEditorState extends State<TextEditor> {
                       !_summaryController.document
                           .toPlainText()
                           .contains('Escribe el resumen')) ...[
+                    const Text(
+                      'Motivo de la consulta / Resumen',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(10),
@@ -965,7 +980,7 @@ class _TextEditorState extends State<TextEditor> {
                 // Campo de acotaciones (content_delta) editable
                 if (_isEditing) ...[
                   const Text(
-                    'Acotaciones adicionales',
+                    'Hallazgos / Tratamiento / Acotaciones',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -1015,6 +1030,15 @@ class _TextEditorState extends State<TextEditor> {
                       !_contentDeltaController.document
                           .toPlainText()
                           .contains('Escribe las acotaciones')) ...[
+                    const Text(
+                      'Hallazgos / Tratamiento / Acotaciones',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(10),

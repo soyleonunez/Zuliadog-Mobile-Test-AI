@@ -6,6 +6,7 @@ import '../features/utilities/recetas.dart';
 import '../features/utilities/laboratorio.dart';
 import '../features/utilities/agenda.dart';
 import '../features/utilities/visor.dart';
+import '../features/utilities/hospitalizacion.dart';
 import '../features/utilities/recursos.dart';
 import '../features/utilities/tickets.dart';
 import '../features/utilities/reportes.dart';
@@ -38,6 +39,9 @@ class NavigationHelper {
               break;
             case '/agenda':
               page = const AgendaPage();
+              break;
+            case '/hospitalizacion':
+              page = const HospitalizacionPage();
               break;
             case '/visor-medico':
               page = const VisorMedicoPage();
@@ -87,6 +91,9 @@ class NavigationHelper {
               break;
             case '/agenda':
               page = const AgendaPage();
+              break;
+            case '/hospitalizacion':
+              page = const HospitalizacionPage();
               break;
             case '/visor-medico':
               page = const VisorMedicoPage();

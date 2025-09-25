@@ -4,6 +4,7 @@ import 'package:zuliadog/features/widgets/optimizedhist.dart';
 import '../menu.dart';
 import '../../core/navigation.dart';
 import '../../core/responsive_wrapper.dart';
+import 'hospitalizacion.dart';
 
 /// =========================
 /// WIDGETS PRINCIPALES
@@ -58,6 +59,7 @@ class _HistoriasPageState extends State<HistoriasPage> {
           body: Stack(
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Sidebar
                   AppSidebar(
@@ -84,8 +86,8 @@ class _HistoriasPageState extends State<HistoriasPage> {
                           case 'frame_agenda':
                             routePath = '/agenda';
                             break;
-                          case 'frame_visor_medico':
-                            routePath = '/visor-medico';
+                          case 'frame_hospitalizacion':
+                            routePath = HospitalizacionPage.route;
                             break;
                           case 'frame_recursos':
                             routePath = '/recursos';
@@ -120,8 +122,7 @@ class _HistoriasPageState extends State<HistoriasPage> {
     return OptimizedHistoriasPage(
       clinicId:
           '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203', // TODO: Obtener del contexto
-      mrn:
-          _selectedPatientId, // Puede ser null, OptimizedHistoriasPage lo maneja
+      mrn: widget.mrn, // Usar el MRN directamente, no el patientId
     );
   }
 }

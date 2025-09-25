@@ -3,10 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Modelo de fila devuelta por la vista `patients_search`
-/// Asegúrate de que la vista tenga estas columnas:
-/// patient_id, clinic_id, patient_name, history_number, mrn_int,
-/// owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex
+/// Modelo de fila devuelta por la vista `v_app`
+/// Mapea los campos de v_app a una estructura consistente
 class PatientSearchRow {
   final String patientId;
   final String clinicId;
@@ -38,59 +36,90 @@ class PatientSearchRow {
 
   factory PatientSearchRow.fromJson(Map<String, dynamic> j) {
     return PatientSearchRow(
-      patientId: j['patient_id'] as String,
-      clinicId: j['clinic_id'] as String,
-      patientName: j['patient_name'] as String,
-      historyNumber: j['history_number'] as String?,
-      mrnInt: j['mrn_int'] as int?,
-      ownerName: j['owner_name'] as String?,
-      ownerPhone: j['owner_phone'] as String?,
-      ownerEmail: j['owner_email'] as String?,
-      species: j['species_label'] as String?,
-      breed: j['breed_label'] as String?,
-      breedId: j['breed_id'] as String?,
-      sex: j['sex'] as String?,
+      patientId: j['patient_id']?.toString() ?? j['patient_uuid']?.toString() ?? '',
+      clinicId: j['clinic_id']?.toString() ?? '',
+      patientName: j['patient_name']?.toString() ?? j['paciente_name_snapshot']?.toString() ?? '',
+      historyNumber: j['patient_mrn']?.toString() ?? j['history_number_snapshot']?.toString(),
+      mrnInt: j['mrn_int'] is num ? (j['mrn_int'] as num).toInt() : null,
+      ownerName: j['owner_name']?.toString() ?? j['owner_name_snapshot']?.toString(),
+      ownerPhone: j['owner_phone']?.toString(),
+      ownerEmail: j['owner_email']?.toString(),
+      species: _getSpeciesLabel(j['patient_species_code']),
+      breed: j['breed_label']?.toString() ?? j['breed']?.toString(),
+      breedId: j['breed_id']?.toString(),
+      sex: j['sex']?.toString(),
     );
+  }
+
+  static String _getSpeciesLabel(String? speciesCode) {
+    switch (speciesCode?.toUpperCase()) {
+      case 'CAN':
+        return 'Canino';
+      case 'FEL':
+        return 'Felino';
+      case 'AVE':
+        return 'Ave';
+      case 'EQU':
+        return 'Equino';
+      case 'BOV':
+        return 'Bovino';
+      case 'POR':
+        return 'Porcino';
+      case 'CAP':
+        return 'Caprino';
+      case 'OVI':
+        return 'Ovino';
+      default:
+        return speciesCode ?? 'Sin especificar';
+    }
   }
 }
 
 class SearchRepository {
   final SupabaseClient _db = Supabase.instance.client;
 
-  /// Busca por MRN exacto, MRN numérico, nombre de paciente o nombre de dueño.
+  /// Busca en v_app por MRN exacto, MRN numérico, nombre de paciente o nombre de dueño.
   Future<List<PatientSearchRow>> search(String query, {int limit = 30}) async {
     final q = query.trim();
     final isNumeric = int.tryParse(q.replaceAll(RegExp(r'\D'), '')) != null;
 
-    final baseSel = _db.from('patients_search').select(
-      '''
-      patient_id, clinic_id, patient_name, history_number, mrn_int,
-      owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex
-      ''',
-    );
+    final baseSel = _db.from('v_app').select('*');
 
     if (q.isEmpty) {
       // Lista inicial (suave): algunos pacientes ordenados por nombre
-      final rows =
-          await baseSel.order('patient_name', ascending: true).limit(limit);
+      final rows = await baseSel
+          .order('patient_name', ascending: true)
+          .limit(limit);
       return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
     }
 
-    // OR compuesto:
+    // OR compuesto para v_app:
     final ors = <String>[
       "patient_name.ilike.%$q%",
+      "patient_mrn.ilike.%$q%",
       "owner_name.ilike.%$q%",
-      "history_number.eq.$q",
+      "record_title.ilike.%$q%",
       if (isNumeric)
-        "mrn_int.eq.${int.parse(q.replaceAll(RegExp(r'\\D'), ''))}",
+        "patient_mrn.eq.$q",
     ];
 
     final rows = await baseSel
         .or(ors.join(','))
-        .order('mrn_int', ascending: true, nullsFirst: true)
+        .order('patient_mrn', ascending: true, nullsFirst: true)
         .limit(limit);
 
-    return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
+    // Agrupar por patient_id para evitar duplicados
+    final Map<String, Map<String, dynamic>> uniquePatients = {};
+    for (final record in rows) {
+      final patientId = record['patient_id'] ?? record['patient_uuid'];
+      if (patientId != null && !uniquePatients.containsKey(patientId)) {
+        uniquePatients[patientId] = record;
+      }
+    }
+
+    return uniquePatients.values
+        .map((e) => PatientSearchRow.fromJson(e))
+        .toList();
   }
 }
 

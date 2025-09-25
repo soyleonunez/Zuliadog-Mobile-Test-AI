@@ -98,7 +98,6 @@ class _VisorPageState extends State<VisorPage> {
         },
       );
     } catch (e) {
-      print('❌ Error en bootstrap del visor: $e');
       setState(() {
         _errorMessage = 'Error inicializando: $e';
         _isLoading = false;
@@ -129,7 +128,6 @@ class _VisorPageState extends State<VisorPage> {
         try {
           await _loadPreviewFor(_docs[_selectedIndex!]);
         } catch (e) {
-          print('❌ Error al cargar preview: $e');
           setState(() {
             _errorMessage = 'Error al cargar preview: $e';
           });
@@ -178,16 +176,10 @@ class _VisorPageState extends State<VisorPage> {
           throw Exception('El archivo PDF está vacío');
         }
 
-        print('📄 Intentando abrir PDF: $local (${fileSize} bytes)');
-
         // Crear el controlador PDF con manejo de errores
         _pdfController =
             PdfControllerPinch(document: PdfDocument.openFile(local));
-
-        print('✅ PDF abierto exitosamente');
       } catch (e) {
-        print('❌ Error al abrir PDF: $e');
-
         // Limpiar el controlador si falla
         _pdfController?.dispose();
         _pdfController = null;
@@ -212,8 +204,6 @@ class _VisorPageState extends State<VisorPage> {
     try {
       final tempDir = await getTemporaryDirectory();
       final localPath = p.join(tempDir.path, filename);
-
-      print('📥 Descargando archivo: $url -> $localPath');
 
       final dio = Dio();
 
@@ -244,12 +234,8 @@ class _VisorPageState extends State<VisorPage> {
         throw Exception('El archivo descargado está vacío');
       }
 
-      print(
-          '✅ Archivo descargado exitosamente: $localPath (${fileSize} bytes)');
       return localPath;
     } catch (e) {
-      print('❌ Error al descargar archivo: $e');
-
       // Crear un archivo temporal vacío para evitar crashes
       final tempDir = await getTemporaryDirectory();
       final localPath = p.join(tempDir.path, 'error_$filename');

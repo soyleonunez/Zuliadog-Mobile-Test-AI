@@ -24,7 +24,6 @@ class DatabaseQueries {
           .maybeSingle();
       return row;
     } catch (e) {
-      print('❌ Error en getPatientByMrnOrId: $e');
       rethrow;
     }
   }
@@ -69,7 +68,6 @@ class DatabaseQueries {
 
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
-      print('❌ Error en searchPatients: $e');
       rethrow;
     }
   }
@@ -87,7 +85,6 @@ class DatabaseQueries {
           .eq('mrn', patientMrn)
           .eq('clinic_id', clinicId);
     } catch (e) {
-      print('❌ Error en updatePatient: $e');
       rethrow;
     }
   }
@@ -123,7 +120,6 @@ class DatabaseQueries {
       final rows = await query;
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
-      print('❌ Error en getMedicalRecords: $e');
       rethrow;
     }
   }
@@ -160,7 +156,6 @@ class DatabaseQueries {
         'patient': patient,
       };
     } catch (e) {
-      print('❌ Error en getMedicalRecordWithAttachments: $e');
       return null;
     }
   }
@@ -200,7 +195,6 @@ class DatabaseQueries {
 
       return result['id'] as String;
     } catch (e) {
-      print('❌ Error en createMedicalRecord: $e');
       rethrow;
     }
   }
@@ -221,7 +215,6 @@ class DatabaseQueries {
           .eq('id', recordId)
           .eq('clinic_id', clinicId);
     } catch (e) {
-      print('❌ Error en updateMedicalRecordContent: $e');
       rethrow;
     }
   }
@@ -242,7 +235,6 @@ class DatabaseQueries {
           .eq('id', recordId)
           .eq('clinic_id', clinicId);
     } catch (e) {
-      print('❌ Error en toggleMedicalRecordLock: $e');
       rethrow;
     }
   }
@@ -264,7 +256,6 @@ class DatabaseQueries {
 
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
-      print('❌ Error en getRecordAttachments: $e');
       rethrow;
     }
   }
@@ -291,7 +282,6 @@ class DatabaseQueries {
 
       return Map<String, dynamic>.from(result);
     } catch (e) {
-      print('❌ Error en createRecordAttachment: $e');
       rethrow;
     }
   }
@@ -333,7 +323,6 @@ class DatabaseQueries {
 
       return timeline;
     } catch (e) {
-      print('❌ Error en getPatientTimeline: $e');
       rethrow;
     }
   }
@@ -371,7 +360,6 @@ class DatabaseQueries {
         'today_records': (todayRecordsResult as List).length,
       };
     } catch (e) {
-      print('❌ Error en getClinicStats: $e');
       rethrow;
     }
   }
@@ -395,7 +383,6 @@ class DatabaseQueries {
 
       return result != null;
     } catch (e) {
-      print('❌ Error en mrnExists: $e');
       return false;
     }
   }
@@ -415,7 +402,6 @@ class DatabaseQueries {
 
       return result != null;
     } catch (e) {
-      print('❌ Error en medicalRecordExists: $e');
       return false;
     }
   }
@@ -440,7 +426,6 @@ class DatabaseQueries {
           .eq('id', recordId)
           .eq('clinic_id', clinicId);
     } catch (e) {
-      print('❌ Error en deleteMedicalRecord: $e');
       rethrow;
     }
   }
@@ -472,7 +457,6 @@ class DatabaseQueries {
           .eq('mrn', patientMrn)
           .eq('clinic_id', clinicId);
     } catch (e) {
-      print('❌ Error en deletePatient: $e');
       rethrow;
     }
   }

@@ -5,6 +5,9 @@ import 'package:iconsax/iconsax.dart';
 import '../data/data_service.dart';
 import '../menu.dart';
 import '../../core/navigation.dart';
+import 'hospitalizacion.dart';
+import '../widgets/new_patient_form.dart';
+import '../../core/notifications.dart';
 
 // ZULIADOG / PetTrackr — Panel de gestión de pacientes
 // -----------------------------------------------------
@@ -12,7 +15,7 @@ import '../../core/navigation.dart';
 //  - KPIs (conteo de mascotas, historias)
 //  - Listado de pacientes con búsqueda, filtros por estado y paginación
 //  - Carga de fotos desde el bucket `patients` con URL firmada
-//  - Reconoce la vista `patients_search` (o cae a `patients` + joins mínimos)
+//  - Reconoce la vista `v_app` (vista pública optimizada)
 //  - Scoped por clínica usando el clinic_id hardcodeado (patrón actual)
 //
 // Requisitos:
@@ -32,11 +35,14 @@ class PatientsDashboardPage extends StatefulWidget {
 class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
   final _client = Supabase.instance.client;
 
-  // Usar el clinic_id hardcodeado como en el resto de la aplicación
-  static const String _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203';
+  // Clinic ID dinámico basado en autenticación
+  String? _clinicId;
 
   // KPIs
   int _kpiTotalMascotas = 0;
+  int _kpiCitasCompletadas = 0;
+  double _kpiIngresosGenerados = 0.0;
+  double _kpiSatisfaccion = 0.0;
 
   // Listado
   final _searchCtrl = TextEditingController();
@@ -51,8 +57,30 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
   @override
   void initState() {
     super.initState();
-    _bootstrap();
+    _loadClinicId();
     _searchCtrl.addListener(_onSearchChanged);
+  }
+
+  Future<void> _loadClinicId() async {
+    try {
+      final user = _client.auth.currentUser;
+      if (user != null) {
+        final response = await _client
+            .from('clinic_roles')
+            .select('clinic_id')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .single();
+
+        _clinicId = response['clinic_id'];
+      } else {
+        _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // Fallback
+      }
+      _bootstrap();
+    } catch (e) {
+      _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // Fallback
+      _bootstrap();
+    }
   }
 
   @override
@@ -86,16 +114,51 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
   // KPI loaders
   // -----------------
   Future<void> _loadKpis() async {
+    if (_clinicId == null) return;
+
     try {
+      // Cargar total de mascotas desde v_app
       final countPatients = await _client
-          .from('patients')
-          .select('mrn')
-          .eq('clinic_id', _clinicId);
-      _kpiTotalMascotas = countPatients.length;
+          .from('v_app')
+          .select('patient_id')
+          .eq('clinic_id', _clinicId!);
+
+      // Agrupar por patient_id para evitar duplicados
+      final uniquePatients = <String>{};
+      for (final record in countPatients) {
+        final patientId = record['patient_id'] ?? record['patient_uuid'];
+        if (patientId != null) {
+          uniquePatients.add(patientId);
+        }
+      }
+      _kpiTotalMascotas = uniquePatients.length;
+
+      // Cargar citas completadas (últimos 7 días)
+      final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+      final appointments = await _client
+          .from('appointments')
+          .select('id, status, total_amount')
+          .eq('clinic_id', _clinicId!)
+          .gte('created_at', sevenDaysAgo.toIso8601String());
+
+      _kpiCitasCompletadas =
+          appointments.where((apt) => apt['status'] == 'completed').length;
+
+      // Calcular ingresos de citas completadas
+      _kpiIngresosGenerados = appointments
+          .where((apt) => apt['status'] == 'completed')
+          .fold(0.0, (sum, apt) => sum + (apt['total_amount'] ?? 0.0));
+
+      // Calcular satisfacción promedio (simulado por ahora)
+      _kpiSatisfaccion = 4.8;
 
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('KPI error: $e');
+      // Valores por defecto si hay error
+      _kpiCitasCompletadas = 0;
+      _kpiIngresosGenerados = 0.0;
+      _kpiSatisfaccion = 0.0;
     }
   }
 
@@ -111,22 +174,18 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
 
   Future<void> _loadPage({bool resetToFirst = false}) async {
     if (resetToFirst) _pageIndex = 0;
+    if (_clinicId == null) return;
 
     setState(() => _loading = true);
 
     try {
-      var query = _client
-          .from('patients_search')
-          .select(
-              'patient_id, clinic_id, patient_name, history_number, mrn_int, owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex')
-          .eq('clinic_id', _clinicId);
+      var query = _client.from('v_app').select('*').eq('clinic_id', _clinicId!);
 
       final q = _searchCtrl.text.trim();
       if (q.isNotEmpty) {
-        // Busca por MRN usando filtro básico
-        // Nota: Para búsqueda en múltiples campos, necesitaríamos usar una función RPC
-        // Por ahora, solo buscamos en history_number
-        query = query.eq('history_number', q);
+        // Buscar en múltiples campos de v_app
+        query = query.or(
+            'patient_name.ilike.%$q%,patient_mrn.ilike.%$q%,owner_name.ilike.%$q%,record_title.ilike.%$q%');
       }
 
       switch (_statusFilter) {
@@ -144,36 +203,28 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
       final data = await query.order('patient_name');
       final List rows = (data as List);
 
-      _totalRows = rows.length;
+      // Agrupar por patient_id para evitar duplicados
+      final Map<String, Map<String, dynamic>> uniquePatients = {};
+      for (final record in rows) {
+        final patientId = record['patient_id'] ?? record['patient_uuid'];
+        if (patientId != null && !uniquePatients.containsKey(patientId)) {
+          uniquePatients[patientId] = record;
+        }
+      }
+
+      final uniqueRows = uniquePatients.values.toList();
+      _totalRows = uniqueRows.length;
 
       // Aplicar paginación manualmente
       final from = _pageIndex * _pageSize;
-      final to = (from + _pageSize).clamp(0, rows.length);
-      final paginatedRows = rows.sublist(from, to);
+      final to = (from + _pageSize).clamp(0, uniqueRows.length);
+      final paginatedRows = uniqueRows.sublist(from, to);
 
-      _rows = paginatedRows
-          .map((e) => PatientRow.fromMap(e as Map<String, dynamic>))
-          .toList();
+      _rows = paginatedRows.map((e) => PatientRow.fromMap(e)).toList();
     } catch (e) {
-      // Fallback si la vista no existe: leer de `patients` con join mínimo via RPC o campos básicos
-      debugPrint('Cayó a fallback de patients_search: $e');
-      final fallback = await _client
-          .from('patients')
-          .select(
-              'mrn, name, species, breed, age_years, owner_name, owner_phone, status, last_visit_at, photo_path, clinic_id')
-          .eq('clinic_id', _clinicId)
-          .order('name');
-      final List rows = (fallback as List);
-      _totalRows = rows.length;
-
-      // Aplicar paginación manualmente
-      final from = _pageIndex * _pageSize;
-      final to = (from + _pageSize).clamp(0, rows.length);
-      final paginatedRows = rows.sublist(from, to);
-
-      _rows = paginatedRows
-          .map((e) => PatientRow.fromMap(e as Map<String, dynamic>))
-          .toList();
+      debugPrint('Error al cargar pacientes: $e');
+      _rows = [];
+      _totalRows = 0;
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -225,10 +276,7 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
                 icon: Iconsax.add,
                 text: 'Nuevo Paciente',
                 color: const Color(0xFF4F46E5),
-                onTap: () {
-                  // TODO: Implementar creación de paciente
-                  print('Crear nuevo paciente');
-                },
+                onTap: () => _openNewPatientForm(),
               ),
               const SizedBox(width: 12),
               _buildHeaderButton(
@@ -237,7 +285,6 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
                 color: const Color(0xFF16A34A),
                 onTap: () {
                   // TODO: Implementar exportación
-                  print('Exportar datos');
                 },
               ),
               const SizedBox(width: 12),
@@ -315,7 +362,8 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
 
   Widget _buildKpiGrid() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      margin: const EdgeInsets.symmetric(
+          horizontal: 32), // Mismo padding que la tabla
       child: LayoutBuilder(
         builder: (context, constraints) {
           // Siempre 4 columnas en una sola fila
@@ -335,29 +383,33 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
                 icon: Iconsax.pet,
                 title: 'Mascotas Totales',
                 value: _kpiTotalMascotas.toString(),
-                trend: '-2.5%',
-                trendColor: Colors.red,
+                trend: _calculateTrend(_kpiTotalMascotas, _kpiTotalMascotas),
+                trendColor: _kpiTotalMascotas >= 0 ? Colors.green : Colors.red,
               ),
               _buildKpiCard(
                 icon: Iconsax.tick_circle,
                 title: 'Citas Completadas',
-                value: '1293',
-                trend: '+2.5%',
-                trendColor: Colors.green,
+                value: _kpiCitasCompletadas.toString(),
+                trend:
+                    _calculateTrend(_kpiCitasCompletadas, _kpiCitasCompletadas),
+                trendColor:
+                    _kpiCitasCompletadas >= 0 ? Colors.green : Colors.red,
               ),
               _buildKpiCard(
                 icon: Iconsax.dollar_circle,
                 title: 'Ingresos Generados',
-                value: '\$75,000',
-                trend: '+5%',
-                trendColor: Colors.green,
+                value: '\$${_kpiIngresosGenerados.toStringAsFixed(0)}',
+                trend: _calculateTrend(
+                    _kpiIngresosGenerados, _kpiIngresosGenerados),
+                trendColor:
+                    _kpiIngresosGenerados >= 0 ? Colors.green : Colors.red,
               ),
               _buildKpiCard(
                 icon: Iconsax.emoji_happy,
                 title: 'Satisfacción del Dueño',
-                value: '4.8 / 5.0',
-                trend: '+2.5%',
-                trendColor: Colors.green,
+                value: '${_kpiSatisfaccion.toStringAsFixed(1)} / 5.0',
+                trend: _calculateTrend(_kpiSatisfaccion, _kpiSatisfaccion),
+                trendColor: _kpiSatisfaccion >= 4.0 ? Colors.green : Colors.red,
               ),
             ],
           );
@@ -687,7 +739,15 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
               ],
             ),
           ),
-          Expanded(flex: 1, child: _StatusPill(status: row.status)),
+          Expanded(
+            flex: 1,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                _StatusPill(status: row.status),
+              ],
+            ),
+          ),
           Expanded(
             flex: 1,
             child: Text(
@@ -819,7 +879,7 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
             Navigator.pushNamed(
               context,
               '/historias',
-              arguments: {'mrn': row.mrn},
+              arguments: {'mrn': row.mrn, 'patient_id': row.patientId},
             );
           },
         ),
@@ -830,7 +890,6 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
           color: const Color(0xFF16A34A),
           onTap: () {
             // TODO: Implementar exámenes
-            print('Abrir exámenes para ${row.name}');
           },
         ),
         const SizedBox(width: 8),
@@ -840,7 +899,6 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
           color: const Color(0xFFF59E0B),
           onTap: () {
             // TODO: Implementar edición
-            print('Editar paciente ${row.name}');
           },
         ),
         const SizedBox(width: 8),
@@ -850,7 +908,6 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
           color: const Color(0xFF6B7280),
           onTap: () {
             // TODO: Implementar menú de opciones
-            print('Más opciones para ${row.name}');
           },
         ),
       ],
@@ -966,6 +1023,12 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
     return '3 años'; // Placeholder
   }
 
+  String _calculateTrend(num current, num previous) {
+    if (previous == 0) return '+0%';
+    final change = ((current - previous) / previous * 100);
+    return '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)}%';
+  }
+
   String _getMonthName(int month) {
     const months = [
       'Ene',
@@ -1006,8 +1069,8 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
       case 'frame_agenda':
         navigationRoute = '/agenda';
         break;
-      case 'frame_visor_medico':
-        navigationRoute = '/visor-medico';
+      case 'frame_hospitalizacion':
+        navigationRoute = HospitalizacionPage.route;
         break;
       case 'frame_recursos':
         navigationRoute = '/recursos';
@@ -1039,34 +1102,62 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA), // background-light
-      body: Row(
+      body: Stack(
         children: [
-          // Sidebar de navegación usando el componente existente
-          AppSidebar(
-            activeRoute: 'frame_pacientes',
-            userRole: UserRole.doctor,
-            onTap: (route) {
-              _navigateToRoute(context, route);
-            },
-          ),
-          // Contenido principal
-          Expanded(
-            child: Column(
-              children: [
-                // Header con título y filtro de fecha
-                _buildHeader(),
-                const SizedBox(height: 32),
-                // KPIs en grid
-                _buildKpiGrid(),
-                const SizedBox(height: 32),
-                // Tabla de pacientes
-                Expanded(
-                  child: _buildPatientsTable(),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Sidebar de navegación usando el componente existente
+              AppSidebar(
+                activeRoute: 'frame_pacientes',
+                userRole: UserRole.doctor,
+                onTap: (route) {
+                  _navigateToRoute(context, route);
+                },
+              ),
+              // Contenido principal
+              Expanded(
+                child: Column(
+                  children: [
+                    // Header con título y filtro de fecha
+                    _buildHeader(),
+                    const SizedBox(height: 32),
+                    // KPIs en grid
+                    _buildKpiGrid(),
+                    const SizedBox(height: 32),
+                    // Tabla de pacientes
+                    Expanded(
+                      child: _buildPatientsTable(),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _openNewPatientForm() {
+    // Abrir formulario de nuevo paciente
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => NewPatientForm(
+          clinicId: _clinicId ?? '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203',
+          onPatientCreated: () {
+            // Callback cuando se crea un paciente exitosamente
+            Navigator.of(context).pop();
+            NotificationService.showSuccess('Paciente creado exitosamente');
+            // Recargar datos
+            _loadKpis();
+            _loadPage();
+          },
+          onCancel: () {
+            // Callback cuando se cancela la creación
+            Navigator.of(context).pop();
+          },
+        ),
       ),
     );
   }
@@ -1109,22 +1200,50 @@ class PatientRow {
 
   factory PatientRow.fromMap(Map<String, dynamic> m) {
     return PatientRow(
-      patientId: m['patient_id']?.toString() ?? '',
+      patientId:
+          m['patient_id']?.toString() ?? m['patient_uuid']?.toString() ?? '',
       clinicId: m['clinic_id']?.toString() ?? '',
-      patientName: m['patient_name']?.toString() ?? m['name']?.toString() ?? '',
-      historyNumber: m['history_number']?.toString(),
+      patientName: m['patient_name']?.toString() ??
+          m['paciente_name_snapshot']?.toString() ??
+          '',
+      historyNumber: m['patient_mrn']?.toString() ??
+          m['history_number_snapshot']?.toString(),
       mrnInt: m['mrn_int'] is num ? (m['mrn_int'] as num).toInt() : null,
-      ownerName: m['owner_name'] as String?,
-      ownerPhone: m['owner_phone'] as String?,
-      ownerEmail: m['owner_email'] as String?,
-      species: m['species_label'] as String? ?? m['species'] as String?,
-      breed: m['breed_label'] as String? ?? m['breed'] as String?,
+      ownerName:
+          m['owner_name']?.toString() ?? m['owner_name_snapshot']?.toString(),
+      ownerPhone: m['owner_phone']?.toString(),
+      ownerEmail: m['owner_email']?.toString(),
+      species: _getSpeciesLabel(m['patient_species_code']),
+      breed: m['breed_label']?.toString() ?? m['breed']?.toString(),
       breedId: m['breed_id']?.toString(),
-      sex: m['sex'] as String?,
+      sex: m['sex']?.toString(),
       status: (m['status'] ?? 'active') as String,
       lastVisitAt: _tryParseDate(m['last_visit_at']),
-      photoPath: m['photo_path'] as String?,
+      photoPath: m['photo_path']?.toString(),
     );
+  }
+
+  static String _getSpeciesLabel(String? speciesCode) {
+    switch (speciesCode?.toUpperCase()) {
+      case 'CAN':
+        return 'Canino';
+      case 'FEL':
+        return 'Felino';
+      case 'AVE':
+        return 'Ave';
+      case 'EQU':
+        return 'Equino';
+      case 'BOV':
+        return 'Bovino';
+      case 'POR':
+        return 'Porcino';
+      case 'CAP':
+        return 'Caprino';
+      case 'OVI':
+        return 'Ovino';
+      default:
+        return speciesCode ?? 'Sin especificar';
+    }
   }
 
   static DateTime? _tryParseDate(dynamic v) {
@@ -1138,7 +1257,11 @@ class PatientRow {
   }
 
   // Getters para compatibilidad
-  String get mrn => historyNumber ?? mrnInt?.toString().padLeft(6, '0') ?? '';
+  String get mrn {
+    final result = historyNumber ?? mrnInt?.toString().padLeft(6, '0') ?? '';
+    return result;
+  }
+
   String get name => patientName;
 }
 

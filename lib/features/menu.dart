@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:zuliadog/auth/login.dart';
+import 'package:zuliadog/features/home.dart';
 
 enum UserRole { doctor, admin }
 
@@ -22,25 +23,6 @@ class AppMenuItem {
 }
 
 // ==== COLORS ====
-class AppColors {
-  static const primary500 = Color(0xFF5E81F4);
-  static const primary600 = Color(0xFF4B6BE0);
-  static const primary700 = Color(0xFF3B5BD6);
-  static const primary200 = Color(0xFFB8C8FF);
-  static const primary100 = Color(0xFFD6E2FF);
-  static const primary50 = Color(0xFFF0F4FF);
-  static const neutral900 = Color(0xFF0E1116);
-  static const neutral700 = Color(0xFF2C333A);
-  static const neutral600 = Color(0xFF475467);
-  static const neutral500 = Color(0xFF667085);
-  static const neutral400 = Color(0xFF98A2B3);
-  static const neutral200 = Color(0xFFE5E7EB);
-  static const neutral100 = Color(0xFFF1F3F4);
-  static const neutral50 = Color(0xFFF8FAFC);
-  static const success500 = Color(0xFF22C55E);
-  static const warning500 = Color(0xFFF59E0B);
-  static const danger500 = Color(0xFFEF4444);
-}
 
 // ==== TEXT STYLES ====
 class AppText {
@@ -90,9 +72,9 @@ List<AppMenuItem> _allMenuItems = [
     route: 'frame_agenda',
   ),
   AppMenuItem(
-    label: 'Visor médico',
-    icon: Iconsax.document_text,
-    route: 'frame_visor_medico',
+    label: 'Hospitalización',
+    icon: Iconsax.hospital,
+    route: 'frame_hospitalizacion',
     badgeBuilder: () => 3,
   ),
   AppMenuItem(
@@ -319,7 +301,7 @@ class AppSidebar extends StatelessWidget {
 
     return Container(
       width: 260,
-      height: MediaQuery.of(context).size.height,
+      height: 700, // Altura fija como en home.dart
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -330,7 +312,7 @@ class AppSidebar extends StatelessWidget {
         children: [
           // Header con logo
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
             child: Row(
               children: [
                 Material(

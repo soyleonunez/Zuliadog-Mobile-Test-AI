@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zuliadog/core/navigation.dart';
-import 'package:zuliadog/features/data/buscador.dart';
-import 'package:zuliadog/features/data/repository.dart';
 import 'package:zuliadog/features/data/data_service.dart';
 import 'package:zuliadog/features/menu.dart';
-import 'package:zuliadog/features/utilities/visor.dart';
 import 'package:zuliadog/features/utilities/historias.dart';
 import 'package:zuliadog/features/utilities/recetas.dart';
 import 'package:zuliadog/features/utilities/laboratorio.dart';
 import 'package:zuliadog/features/utilities/agenda.dart';
+import 'package:zuliadog/features/utilities/hospitalizacion.dart';
 import 'package:zuliadog/features/utilities/recursos.dart';
 import 'package:zuliadog/features/utilities/tickets.dart';
 import 'package:zuliadog/features/utilities/reportes.dart';
+import 'package:zuliadog/features/widgets/new_patient_form.dart';
+import 'package:zuliadog/core/notifications.dart';
+import 'package:zuliadog/test_storage_access.dart';
 
 /// =======================
 /// Zuliadog — Home (Desktop) v2.2 (one-file)
@@ -41,12 +43,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // Variables para el buscador integrado
   final TextEditingController _searchController = TextEditingController();
-  List<PatientSearchRow> _searchResults = [];
+  List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
   bool _showSearchResults = false;
-
-  // Repositorio de datos
-  final DataRepository _repository = DataRepository();
+  String? _clinicId;
 
   // Controladores de animación (para futuras implementaciones)
   // late AnimationController _quickActionController;
@@ -55,9 +55,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _loadClinicId();
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) setState(() => loading = false);
     });
+  }
+
+  Future<void> _loadClinicId() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        final response = await Supabase.instance.client
+            .from('clinic_roles')
+            .select('clinic_id')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .single();
+
+        _clinicId = response['clinic_id'];
+      } else {
+        _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // Fallback
+      }
+    } catch (e) {
+      print('Error al cargar clinic_id: $e');
+      _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // Fallback
+    }
   }
 
   @override
@@ -133,19 +155,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         _WelcomeHeader(
                                           doctorName: 'Doctor/a',
                                           onSync: () async {
-                                            // TODO: Implementar sincronización de datos
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                    'Sincronización completada'),
-                                                backgroundColor: Colors.green,
-                                              ),
-                                            );
+                                            // Probar acceso a buckets de storage
+                                            print(
+                                                '🔄 INICIANDO PRUEBA DE STORAGE...');
+
+                                            try {
+                                              final testService =
+                                                  StorageTestService();
+                                              await testService
+                                                  .testSimpleAccess();
+
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                      '✅ Prueba de Storage completada - Revisa la consola'),
+                                                  backgroundColor: Colors.green,
+                                                  duration:
+                                                      Duration(seconds: 3),
+                                                ),
+                                              );
+                                            } catch (e) {
+                                              print(
+                                                  '❌ Error en prueba de storage: $e');
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                      '❌ Error en prueba de storage: $e'),
+                                                  backgroundColor: Colors.red,
+                                                  duration: const Duration(
+                                                      seconds: 5),
+                                                ),
+                                              );
+                                            }
                                           },
                                         ),
                                         const SizedBox(height: 16),
-                                        _QuickActionsSection(),
+                                        _QuickActionsSection(
+                                            onNewPatient: _openNewPatientForm),
                                         const SizedBox(height: 16),
                                         _ImportantSection(loading: loading),
                                         const SizedBox(height: 16),
@@ -224,8 +272,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       case 'frame_agenda':
         routePath = AgendaPage.route;
         break;
-      case 'frame_visor_medico':
-        routePath = VisorMedicoPage.route;
+      case 'frame_hospitalizacion':
+        routePath = HospitalizacionPage.route;
         break;
       case 'frame_recursos':
         routePath = RecursosPage.route;
@@ -242,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) {
+    if (query.trim().isEmpty || _clinicId == null) {
       setState(() {
         _showSearchResults = false;
         _searchResults = [];
@@ -256,9 +304,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
 
     try {
-      final results = await _repository.searchPatients(query, limit: 10);
+      // Buscar en v_app con filtros múltiples
+      final results = await Supabase.instance.client
+          .from('v_app')
+          .select('*')
+          .eq('clinic_id', _clinicId!)
+          .or('patient_name.ilike.%$query%,patient_mrn.ilike.%$query%,owner_name.ilike.%$query%,record_title.ilike.%$query%')
+          .limit(10);
+
+      // Agrupar por patient_id para evitar duplicados
+      final Map<String, Map<String, dynamic>> uniquePatients = {};
+      for (final record in results) {
+        final patientId = record['patient_id'] ?? record['patient_uuid'];
+        if (patientId != null && !uniquePatients.containsKey(patientId)) {
+          uniquePatients[patientId] = record;
+        }
+      }
+
       setState(() {
-        _searchResults = results;
+        _searchResults = uniquePatients.values.toList();
         _isSearching = false;
       });
     } catch (e) {
@@ -496,11 +560,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSearchResultItem(PatientSearchRow patient) {
+  Widget _buildSearchResultItem(Map<String, dynamic> patient) {
+    final name = patient['patient_name'] ??
+        patient['paciente_name_snapshot'] ??
+        'Sin nombre';
+    final species = _getSpeciesLabel(patient['patient_species_code']);
+    final mrn =
+        patient['patient_mrn'] ?? patient['history_number_snapshot'] ?? 'N/A';
+    final ownerName = patient['owner_name'] ??
+        patient['owner_name_snapshot'] ??
+        'No especificado';
+
     return InkWell(
       onTap: () {
         // TODO: Navegar a detalles del paciente
-        print('Seleccionado: ${patient.patientName}');
+        print('Seleccionado: $name');
         setState(() {
           _showSearchResults = false;
           _searchController.clear();
@@ -512,8 +586,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           children: [
             // Avatar con imagen de raza o fallback por especie
             DataService().buildBreedImageWidget(
-              breedId: patient.breedId,
-              species: patient.species,
+              breedId: patient['breed_id'],
+              species: species,
               width: 36,
               height: 36,
               borderRadius: 12,
@@ -526,7 +600,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    patient.patientName,
+                    name,
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
@@ -537,7 +611,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 1),
                   Text(
-                    'Dueño: ${patient.ownerName}',
+                    'Dueño: $ownerName',
                     style: TextStyle(
                       color: AppColors.neutral600,
                       fontSize: 11,
@@ -545,10 +619,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (patient.historyNumber?.isNotEmpty == true) ...[
+                  if (mrn != 'N/A') ...[
                     const SizedBox(height: 1),
                     Text(
-                      'Historia: ${patient.historyNumber}',
+                      'Historia: $mrn',
                       style: TextStyle(
                         color: AppColors.neutral500,
                         fontSize: 10,
@@ -560,18 +634,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
 
             // Badge de especie
-            if (patient.species?.isNotEmpty == true)
+            if (species.isNotEmpty)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color:
-                      _getSpeciesColor(patient.species ?? '').withOpacity(0.1),
+                  color: _getSpeciesColor(species).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  patient.species ?? '',
+                  species,
                   style: TextStyle(
-                    color: _getSpeciesColor(patient.species ?? ''),
+                    color: _getSpeciesColor(species),
                     fontSize: 9,
                     fontWeight: FontWeight.w600,
                   ),
@@ -581,6 +654,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  String _getSpeciesLabel(String? speciesCode) {
+    switch (speciesCode?.toUpperCase()) {
+      case 'CAN':
+        return 'Canino';
+      case 'FEL':
+        return 'Felino';
+      case 'AVE':
+        return 'Ave';
+      case 'EQU':
+        return 'Equino';
+      case 'BOV':
+        return 'Bovino';
+      case 'POR':
+        return 'Porcino';
+      case 'CAP':
+        return 'Caprino';
+      case 'OVI':
+        return 'Ovino';
+      default:
+        return speciesCode ?? 'Sin especificar';
+    }
   }
 
   Color _getSpeciesColor(String species) {
@@ -599,6 +695,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       default:
         return AppColors.primary600;
     }
+  }
+
+  void _openNewPatientForm() {
+    // Abrir formulario de nuevo paciente
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => NewPatientForm(
+          clinicId: _clinicId ?? '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203',
+          onPatientCreated: () {
+            // Callback cuando se crea un paciente exitosamente
+            Navigator.of(context).pop();
+            NotificationService.showSuccess('Paciente creado exitosamente');
+            // Recargar datos si es necesario
+            _loadClinicId();
+          },
+          onCancel: () {
+            // Callback cuando se cancela la creación
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
   }
 }
 
@@ -854,7 +972,8 @@ class _TopBarButtonState extends State<_TopBarButton>
 /// Acciones rápidas
 /// =======================
 class _QuickActionsSection extends StatelessWidget {
-  const _QuickActionsSection();
+  final VoidCallback onNewPatient;
+  const _QuickActionsSection({required this.onNewPatient});
 
   @override
   Widget build(BuildContext context) {
@@ -863,7 +982,7 @@ class _QuickActionsSection extends StatelessWidget {
         icon: Iconsax.user_add,
         label: 'Nuevo Paciente',
         color: AppColors.primary500,
-        onTap: () {},
+        onTap: onNewPatient,
       ),
       _QuickAction(
         icon: Iconsax.calendar_add,

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 class TutorialScreen extends StatefulWidget {
   const TutorialScreen({super.key});
@@ -84,19 +83,19 @@ class _TutorialScreenState extends State<TutorialScreen> {
   String _getTutorialImage(int index) {
     switch (index) {
       case 0:
-        return 'Assets/Images/tutorial_welcome.png'; // Bienvenido a Zuliadog
+        return 'Assets/Icon/appicon.png'; // Bienvenido a Zuliadog
       case 1:
-        return 'Assets/Images/tutorial_patients.png'; // Gestión de Pacientes
+        return 'Assets/Icon/Dog.png'; // Gestión de Pacientes
       case 2:
-        return 'Assets/Images/tutorial_appointments.png'; // Sistema de Citas
+        return 'Assets/Icon/Day.png'; // Sistema de Citas
       case 3:
-        return 'Assets/Images/tutorial_prescriptions.png'; // Recetas Médicas
+        return 'Assets/Icon/Med.png'; // Recetas Médicas
       case 4:
-        return 'Assets/Images/tutorial_laboratory.png'; // Laboratorio
+        return 'Assets/Icon/Lab.png'; // Laboratorio
       case 5:
-        return 'Assets/Images/tutorial_reports.png'; // Reportes y Estadísticas
+        return 'Assets/Icon/Hosp.png'; // Reportes y Estadísticas
       default:
-        return 'Assets/Icon/appicon.svg'; // Fallback al logo
+        return 'Assets/Icon/appicon.png'; // Fallback al logo
     }
   }
 
@@ -147,21 +146,18 @@ class _TutorialScreenState extends State<TutorialScreen> {
                               ),
                             ],
                           ),
-                          child: ClipOval(
+                          child: Center(
                             child: Image.asset(
                               _getTutorialImage(index),
-                              width: 120,
-                              height: 120,
-                              fit: BoxFit.cover,
+                              width: 85, // 70.8% de 120
+                              height: 85, // 70.8% de 120
+                              fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) {
-                                // Fallback al SVG si no existe la imagen
-                                return Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: SvgPicture.asset(
-                                    'Assets/Icon/appicon.svg',
-                                    width: 80,
-                                    height: 80,
-                                  ),
+                                // Fallback al PNG si no existe la imagen
+                                return Image.asset(
+                                  'Assets/Icon/appicon.png',
+                                  width: 85,
+                                  height: 85,
                                 );
                               },
                             ),

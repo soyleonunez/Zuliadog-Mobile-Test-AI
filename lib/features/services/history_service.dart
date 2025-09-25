@@ -11,12 +11,8 @@ class HistoryService {
   /// Método de diagnóstico para verificar la conexión a Supabase
   Future<Map<String, dynamic>> diagnoseConnection() async {
     try {
-      print('🔍 Iniciando diagnóstico de conexión...');
-
       // 1. Verificar conexión básica
       await _supa.from('clinics').select('id').limit(1);
-
-      print('✅ Conexión básica exitosa');
 
       // 2. Verificar tablas principales
       final tables = [
@@ -35,10 +31,8 @@ class HistoryService {
         try {
           await _supa.from(table).select('id').limit(1);
           tableStatus[table] = true;
-          print('✅ Tabla $table accesible');
         } catch (e) {
           tableStatus[table] = false;
-          print('❌ Tabla $table no accesible: $e');
         }
       }
 
@@ -46,7 +40,7 @@ class HistoryService {
       final views = [
         'v_patient_owner',
         'v_records_full',
-        'patients_search' // Nueva vista optimizada para búsquedas
+        'v_app' // Vista pública optimizada para búsquedas
       ];
       final viewStatus = <String, bool>{};
 
@@ -54,10 +48,8 @@ class HistoryService {
         try {
           await _supa.from(view).select('*').limit(1);
           viewStatus[view] = true;
-          print('✅ Vista $view accesible');
         } catch (e) {
           viewStatus[view] = false;
-          print('❌ Vista $view no accesible: $e');
         }
       }
 
@@ -68,7 +60,6 @@ class HistoryService {
         'timestamp': DateTime.now().toIso8601String(),
       };
     } catch (e) {
-      print('❌ Error en diagnóstico: $e');
       return {
         'connection': false,
         'error': e.toString(),
@@ -81,8 +72,6 @@ class HistoryService {
   Future<List<HistoryBlock>> getHistoryBlocks(String patientMrn,
       {String? clinicId}) async {
     try {
-      print('🔍 Obteniendo bloques para patientMrn: $patientMrn');
-
       final clinicIdValue = clinicId ?? '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203';
 
       // Usar directamente la tabla medical_records
@@ -94,17 +83,12 @@ class HistoryService {
           .order('date', ascending: false)
           .order('created_at', ascending: false);
 
-      print(
-          '📊 Resultados obtenidos de medical_records: ${rows.length} bloques');
-
       if (rows.isNotEmpty) {
         return _processHistoryBlocks(rows);
       }
 
-      print('⚠️ No se encontraron bloques para patientMrn: $patientMrn');
       return [];
     } catch (e) {
-      print('❌ Error al obtener bloques: $e');
       return [];
     }
   }
@@ -177,10 +161,9 @@ class HistoryService {
       );
 
       final recordId = result['record_id'] as String;
-      print('✅ Bloque creado exitosamente: $recordId');
+
       return recordId;
     } catch (e) {
-      print('❌ Error al crear bloque: $e');
       rethrow;
     }
   }
@@ -196,7 +179,6 @@ class HistoryService {
         contentDelta: deltaJson,
       );
     } catch (e) {
-      print('❌ Error al actualizar contenido: $e');
       rethrow;
     }
   }
@@ -212,7 +194,6 @@ class HistoryService {
         locked: locked,
       );
     } catch (e) {
-      print('❌ Error al cambiar estado de bloqueo: $e');
       rethrow;
     }
   }
@@ -241,8 +222,6 @@ class HistoryService {
   /// Obtiene el timeline de cambios para un paciente
   Future<List<TimelineEvent>> getTimeline(String patientId) async {
     try {
-      print('🔍 Construyendo timeline para patientId: $patientId');
-
       final recs = await _supa
           .from('medical_records')
           .select('id, created_at, updated_at, locked, created_by')
@@ -250,7 +229,6 @@ class HistoryService {
           .order('created_at', ascending: true);
 
       if (recs.isEmpty) {
-        print('📝 No hay historias médicas para este paciente');
         return [];
       }
 
@@ -290,10 +268,8 @@ class HistoryService {
       // Ordenar por fecha
       events.sort((a, b) => a.at.compareTo(b.at));
 
-      print('📊 Timeline construido: ${events.length} eventos');
       return events;
     } catch (e) {
-      print('❌ Error en getTimeline: $e');
       return [];
     }
   }
@@ -317,7 +293,6 @@ class HistoryService {
               ))
           .toList();
     } catch (e) {
-      print('❌ Error al obtener adjuntos: $e');
       return [];
     }
   }
@@ -332,7 +307,6 @@ class HistoryService {
 
       return rows.map((row) => row['id'] as String).toList();
     } catch (e) {
-      print('❌ Error al obtener IDs de registros: $e');
       return [];
     }
   }
@@ -341,30 +315,27 @@ class HistoryService {
   // MÉTODOS DE BÚSQUEDA DE PACIENTES
   // ========================================
 
-  /// Busca pacientes por nombre, MRN o dueño usando patients_search
+  /// Busca pacientes por nombre, MRN o dueño usando v_app
   Future<List<PatientSearchRow>> searchPatients(String query,
       {int limit = 30}) async {
     try {
       final clinicId =
           '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // TODO: Obtener del contexto
 
-      print('🔍 Buscando pacientes con query: "$query" en clinicId: $clinicId');
-
       final q = query.trim();
 
-      // Usar patients_search que tiene todos los datos necesarios
-      var queryBuilder = _supa.from('patients_search').select('''
-            patient_id, clinic_id, patient_name, history_number, mrn_int,
-            owner_name, owner_phone, owner_email, species_label, breed_label, breed_id, sex
-          ''').eq('clinic_id', clinicId);
+      // Usar v_app que tiene todos los datos necesarios
+      var queryBuilder =
+          _supa.from('v_app').select('*').eq('clinic_id', clinicId);
 
       if (q.isNotEmpty) {
-        // Búsqueda con OR compuesto
+        // Búsqueda con OR compuesto para v_app
         final ors = <String>[
           "patient_name.ilike.%$q%",
+          "patient_mrn.ilike.%$q%",
           "owner_name.ilike.%$q%",
-          "history_number.ilike.%$q%", // Búsqueda parcial en número de historia
-          "history_number.eq.$q", // Búsqueda exacta en número de historia
+          "record_title.ilike.%$q%",
+          "patient_mrn.eq.$q", // Búsqueda exacta en MRN
         ];
 
         queryBuilder = queryBuilder.or(ors.join(','));
@@ -374,10 +345,19 @@ class HistoryService {
           .order('patient_name', ascending: true)
           .limit(limit);
 
-      print('📊 Resultados encontrados: ${rows.length}');
-      return rows.map((row) => PatientSearchRow.fromJson(row)).toList();
+      // Agrupar por patient_id para evitar duplicados
+      final Map<String, Map<String, dynamic>> uniquePatients = {};
+      for (final record in rows) {
+        final patientId = record['patient_id'] ?? record['patient_uuid'];
+        if (patientId != null && !uniquePatients.containsKey(patientId)) {
+          uniquePatients[patientId] = record;
+        }
+      }
+
+      return uniquePatients.values
+          .map((row) => PatientSearchRow.fromJson(row))
+          .toList();
     } catch (e) {
-      print('❌ Error en searchPatients: $e');
       rethrow;
     }
   }
@@ -388,8 +368,6 @@ class HistoryService {
     required String mrn,
   }) async {
     try {
-      print('🔍 Obteniendo historias para MRN: $mrn en clinicId: $clinicId');
-
       // Consulta directa a medical_records
       final res = await _supa
           .from('medical_records')
@@ -398,7 +376,6 @@ class HistoryService {
           .eq('patient_id', mrn);
 
       final records = List<Map<String, dynamic>>.from(res as List);
-      print('📊 Historias encontradas: ${records.length}');
 
       // Ordenar por fecha (más reciente primero)
       records.sort((a, b) {
@@ -407,50 +384,41 @@ class HistoryService {
         return dateB.compareTo(dateA);
       });
 
-      print('📊 Historias ordenadas: ${records.length}');
       return records;
     } catch (e) {
-      print('❌ Error en fetchRecords: $e');
       rethrow;
     }
   }
 
-  /// Obtiene un paciente por MRN usando patients_search
+  /// Obtiene un paciente por MRN usando v_app
   Future<PatientSummary?> getPatientSummary(String patientMrn) async {
     try {
       final clinicId =
           '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // TODO: Obtener del contexto
 
-      print('🔍 Buscando paciente con MRN: $patientMrn en clinicId: $clinicId');
-
-      // Usar patients_search que tiene toda la información necesaria
+      // Usar v_app que tiene toda la información necesaria
       try {
         var queryBuilder =
-            _supa.from('patients_search').select().eq('clinic_id', clinicId);
+            _supa.from('v_app').select('*').eq('clinic_id', clinicId);
 
-        // Si parece ser un UUID, buscar por patient_id, sino por history_number
+        // Si parece ser un UUID, buscar por patient_id, sino por patient_mrn
         if (patientMrn.contains('-')) {
           queryBuilder = queryBuilder.eq('patient_id', patientMrn);
         } else {
-          queryBuilder = queryBuilder.eq('history_number', patientMrn);
+          queryBuilder = queryBuilder.eq('patient_mrn', patientMrn);
         }
 
         final rows = await queryBuilder.limit(1);
 
         if (rows.isNotEmpty) {
           final row = rows.first;
-          print(
-              '✅ Paciente encontrado en patients_search: ${row['patient_name']}');
+
           return PatientSummary.fromJson(row);
         }
-      } catch (e) {
-        print('⚠️ Error con patients_search: $e');
-      }
+      } catch (e) {}
 
-      print('⚠️ No se encontró paciente con MRN: $patientMrn');
       return null;
     } catch (e) {
-      print('❌ Error en getPatientSummary: $e');
       return null;
     }
   }
@@ -467,7 +435,6 @@ class HistoryService {
         patientData: patientData,
       );
     } catch (e) {
-      print('❌ Error en updatePatientInfo: $e');
       rethrow;
     }
   }
@@ -478,8 +445,6 @@ class HistoryService {
     bool activeOnly = true,
   }) async {
     try {
-      print('🔍 Obteniendo roles de clínica: $clinicId');
-
       var query = _supa.from('clinic_roles').select().eq('clinic_id', clinicId);
 
       if (activeOnly) {
@@ -488,10 +453,8 @@ class HistoryService {
 
       final rows = await query.order('created_at', ascending: false);
 
-      print('📊 Roles encontrados: ${rows.length}');
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
-      print('❌ Error en getClinicRoles: $e');
       rethrow;
     }
   }
@@ -502,8 +465,6 @@ class HistoryService {
     required String email,
   }) async {
     try {
-      print('🔍 Buscando rol por email: $email en clínica: $clinicId');
-
       final rows = await _supa
           .from('clinic_roles')
           .select()
@@ -514,14 +475,12 @@ class HistoryService {
 
       if (rows.isNotEmpty) {
         final role = rows.first;
-        print('✅ Rol encontrado: ${role['role']} para ${role['email']}');
+
         return role;
       }
 
-      print('⚠️ No se encontró rol para email: $email');
       return null;
     } catch (e) {
-      print('❌ Error en getRoleByEmail: $e');
       return null;
     }
   }
@@ -557,10 +516,8 @@ class HistoryService {
         attachments: attachments,
       );
 
-      print('✅ Record guardado exitosamente: $result');
       return result;
     } catch (e) {
-      print('❌ Error en saveMedicalRecord: $e');
       rethrow;
     }
   }
@@ -591,10 +548,7 @@ class HistoryService {
           .update(updateData)
           .eq('id', recordId)
           .eq('clinic_id', clinicId);
-
-      print('✅ Contenido del record actualizado: $recordId');
     } catch (e) {
-      print('❌ Error en updateRecordContent: $e');
       rethrow;
     }
   }
@@ -614,10 +568,7 @@ class HistoryService {
           })
           .eq('id', recordId)
           .eq('clinic_id', clinicId);
-
-      print('✅ Estado de bloqueo actualizado: $recordId -> $locked');
     } catch (e) {
-      print('❌ Error en toggleRecordLock: $e');
       rethrow;
     }
   }
@@ -642,10 +593,8 @@ class HistoryService {
           .select()
           .single();
 
-      print('✅ Adjunto subido: $label');
       return Map<String, dynamic>.from(attachment);
     } catch (e) {
-      print('❌ Error en uploadAttachment: $e');
       rethrow;
     }
   }
@@ -663,7 +612,6 @@ class HistoryService {
 
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
-      print('❌ Error en getRecordAttachments: $e');
       rethrow;
     }
   }
@@ -737,10 +685,9 @@ class HistoryService {
           .upload(path, file, fileOptions: const FileOptions(upsert: true));
 
       final publicUrl = _supa.storage.from(bucket).getPublicUrl(path);
-      print('✅ PDF subido exitosamente: $path');
+
       return publicUrl;
     } catch (e) {
-      print('❌ Error al subir PDF: $e');
       rethrow;
     }
   }
@@ -765,10 +712,9 @@ class HistoryService {
 
       final res = await _supa
           .rpc('add_prescription_attachment', params: {'payload': payload});
-      print('✅ Attachment de receta registrado: $storagePath');
+
       return Map<String, dynamic>.from(res as Map);
     } catch (e) {
-      print('❌ Error al registrar attachment de receta: $e');
       rethrow;
     }
   }
@@ -811,10 +757,8 @@ class HistoryService {
             },
       );
 
-      print('✅ Receta subida y registrada exitosamente');
       return result;
     } catch (e) {
-      print('❌ Error en uploadAndRegisterPrescription: $e');
       rethrow;
     }
   }
@@ -840,10 +784,8 @@ class HistoryService {
           .or('meta->>type.eq.prescription,label.ilike.Receta%')
           .order('created_at', ascending: false);
 
-      print('📋 Recetas encontradas: ${rows.length}');
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
-      print('❌ Error al obtener recetas: $e');
       return [];
     }
   }
@@ -953,13 +895,18 @@ class AttachmentTimeline {
   });
 }
 
-/// Modelo para búsqueda de pacientes
+/// Modelo para búsqueda de pacientes usando v_app
 class PatientSearchRow {
   final String patientId;
   final String? historyNumber;
   final String patientName;
   final String? ownerName;
   final String? species;
+  final String? breed;
+  final String? breedId;
+  final String? ownerPhone;
+  final String? ownerEmail;
+  final String? sex;
 
   PatientSearchRow({
     required this.patientId,
@@ -967,16 +914,55 @@ class PatientSearchRow {
     required this.patientName,
     this.ownerName,
     this.species,
+    this.breed,
+    this.breedId,
+    this.ownerPhone,
+    this.ownerEmail,
+    this.sex,
   });
 
   factory PatientSearchRow.fromJson(Map<String, dynamic> json) {
     return PatientSearchRow(
-      patientId: json['patient_id'] as String,
-      historyNumber: json['history_number'] as String?,
-      patientName: json['patient_name'] as String,
-      ownerName: json['owner_name'] as String?,
-      species: json['species_label'] as String?,
+      patientId: json['patient_id']?.toString() ??
+          json['patient_uuid']?.toString() ??
+          '',
+      historyNumber: json['patient_mrn']?.toString() ??
+          json['history_number_snapshot']?.toString(),
+      patientName: json['patient_name']?.toString() ??
+          json['paciente_name_snapshot']?.toString() ??
+          '',
+      ownerName: json['owner_name']?.toString() ??
+          json['owner_name_snapshot']?.toString(),
+      species: _getSpeciesLabel(json['patient_species_code']),
+      breed: json['breed_label']?.toString() ?? json['breed']?.toString(),
+      breedId: json['breed_id']?.toString(),
+      ownerPhone: json['owner_phone']?.toString(),
+      ownerEmail: json['owner_email']?.toString(),
+      sex: json['sex']?.toString(),
     );
+  }
+
+  static String _getSpeciesLabel(String? speciesCode) {
+    switch (speciesCode?.toUpperCase()) {
+      case 'CAN':
+        return 'Canino';
+      case 'FEL':
+        return 'Felino';
+      case 'AVE':
+        return 'Ave';
+      case 'EQU':
+        return 'Equino';
+      case 'BOV':
+        return 'Bovino';
+      case 'POR':
+        return 'Porcino';
+      case 'CAP':
+        return 'Caprino';
+      case 'OVI':
+        return 'Ovino';
+      default:
+        return speciesCode ?? 'Sin especificar';
+    }
   }
 }
 
@@ -1025,20 +1011,9 @@ class PatientSummary {
 /// Diagnóstico: obtener todos los registros médicos para debug
 Future<void> debugAllRecords() async {
   try {
-    print('🔍 DIAGNÓSTICO: Obteniendo todos los registros médicos...');
     final _supa = Supabase.instance.client;
     final allRecords = await _supa.from('medical_records').select('*');
-    print('📊 Total de registros en medical_records: ${allRecords.length}');
 
-    for (var record in allRecords) {
-      print('  - ID: ${record['id']}');
-      print('    patient_id: ${record['patient_id']}');
-      print('    clinic_id: ${record['clinic_id']}');
-      print('    title: ${record['title']}');
-      print('    date: ${record['date']}');
-      print('    ---');
-    }
-  } catch (e) {
-    print('❌ Error en diagnóstico: $e');
-  }
+    for (var record in allRecords) {}
+  } catch (e) {}
 }

@@ -23,8 +23,8 @@ class DataService {
   /// Descarga un archivo a la carpeta de Descargas del usuario
   Future<String> downloadToDownloads(String url, String filename) async {
     try {
-      print('📥 Descargando archivo a Descargas: $filename');
-      print('🔗 URL: $url');
+      
+      
 
       // Obtener la carpeta de Descargas
       final downloadsDir = await _getDownloadsDirectory();
@@ -39,13 +39,13 @@ class DataService {
       // Verificar si la URL es accesible
       try {
         final response = await _dio.head(url);
-        print('📡 Status HEAD: ${response.statusCode}');
+        
 
         if (response.statusCode == 404) {
           throw Exception('Archivo no encontrado (404)');
         }
       } catch (e) {
-        print('⚠️ Error en HEAD request: $e');
+        
         // Continuar con la descarga aunque falle el HEAD
       }
 
@@ -61,10 +61,10 @@ class DataService {
         },
       );
 
-      print('✅ Archivo descargado exitosamente: $filePath');
+      
       return filePath;
     } catch (e) {
-      print('❌ Error descargando archivo: $e');
+      
       rethrow;
     }
   }
@@ -72,7 +72,7 @@ class DataService {
   /// Descarga un archivo a la carpeta temporal para previsualización
   Future<String> downloadToTemp(String url, String filename) async {
     try {
-      print('📥 Descargando archivo temporal: $filename');
+      
 
       final tempDir = await getTemporaryDirectory();
       final filePath = p.join(tempDir.path, filename);
@@ -87,10 +87,10 @@ class DataService {
         ),
       );
 
-      print('✅ Archivo temporal descargado: $filePath');
+      
       return filePath;
     } catch (e) {
-      print('❌ Error descargando archivo temporal: $e');
+      
       rethrow;
     }
   }
@@ -106,7 +106,7 @@ class DataService {
       final response = await _dio.head(url);
       return response.statusCode == 200;
     } catch (e) {
-      print('❌ URL no accesible: $e');
+      
       return false;
     }
   }
@@ -137,7 +137,7 @@ class DataService {
   /// Verifica la conexión con Supabase Storage
   Future<Map<String, dynamic>> testFileConnection() async {
     try {
-      print('🔍 Probando conexión con Supabase Storage...');
+      
 
       // Lista de archivos conocidos para evitar storage.search
       final knownFiles = [
@@ -150,7 +150,7 @@ class DataService {
       // Probar URLs públicas sin usar .list()
       final testUrls =
           knownFiles.map((file) => bucket.getPublicUrl(file)).toList();
-      print('🔗 URLs de prueba generadas: ${testUrls.length}');
+      
 
       // Probar si las URLs son accesibles
       int accessibleCount = 0;
@@ -169,7 +169,7 @@ class DataService {
             'Conexión exitosa! ${knownFiles.length} archivos conocidos, ${accessibleCount} accesibles.',
       };
     } catch (e) {
-      print('❌ Error probando conexión: $e');
+      
       return {
         'success': false,
         'error': e.toString(),
@@ -197,7 +197,7 @@ class DataService {
       }
       return null;
     } catch (e) {
-      print('❌ Error obteniendo información del archivo: $e');
+      
       return null;
     }
   }
@@ -236,7 +236,7 @@ class DataService {
       // El bucket de imágenes es público, generar URL pública inmediata
       return _supa.storage.from(bucket).getPublicUrl(key);
     } catch (e) {
-      print('Error al obtener imagen de raza $breedId: $e');
+      
       return null;
     }
   }
@@ -253,11 +253,11 @@ class DataService {
       case 'canino':
       case 'perro':
       case 'dog':
-        return 'Assets/Images/Dog icon.png';
+        return 'Assets/Icon/Dog.png';
       case 'felino':
       case 'gato':
       case 'cat':
-        return 'Assets/Images/Cat icon.png';
+        return 'Assets/Icon/Cat.png';
       case 'ave':
       case 'pájaro':
       case 'bird':
@@ -545,7 +545,7 @@ class DataService {
   /// Verifica la conexión general con Supabase
   Future<Map<String, dynamic>> testConnection() async {
     try {
-      print('🔍 Probando conexión general con Supabase...');
+      
 
       // Probar conexión de archivos
       final fileTest = await testFileConnection();
@@ -560,7 +560,7 @@ class DataService {
         'message': 'Prueba de conexión completada',
       };
     } catch (e) {
-      print('❌ Error en prueba de conexión general: $e');
+      
       return {
         'success': false,
         'error': e.toString(),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zuliadog/features/home.dart';
+import 'package:zuliadog/core/notifications.dart';
 import 'login.dart';
 
 class DepartmentLoginScreen extends StatefulWidget {
@@ -93,21 +95,67 @@ class _DepartmentLoginScreenState extends State<DepartmentLoginScreen> {
       loadingRole = role;
     });
 
-    // Simular proceso de login
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // Obtener el usuario correspondiente al rol
+      final userData = clinicRoles.firstWhere((user) => user['role'] == role);
+      final userId = userData['user_id'] as String;
+      final email = userData['email'] as String;
+      final clinicId = userData['clinic_id'] as String;
+      final displayName = userData['display_name'] as String;
 
-    setState(() {
-      isLoading = false;
-      loadingRole = null;
-    });
+      // Obtener cliente de Supabase
+      final supabase = Supabase.instance.client;
 
-    // Navegar a la pantalla principal
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const HomeScreen(),
-        ),
-      );
+      // Para ambiente controlado: login simple por click
+
+      // Simular usuario autenticado configurando el contexto local
+      await _configureUserContext(
+          supabase, userId, email, clinicId, displayName, role);
+
+      setState(() {
+        isLoading = false;
+        loadingRole = null;
+      });
+
+      // Navegar a la pantalla principal
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const HomeScreen(),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        NotificationService.showError('Error al iniciar sesión: $e');
+      }
+      setState(() {
+        isLoading = false;
+        loadingRole = null;
+      });
+    }
+  }
+
+  Future<void> _configureUserContext(
+    SupabaseClient supabase,
+    String userId,
+    String email,
+    String clinicId,
+    String displayName,
+    String role,
+  ) async {
+    try {
+      // Para ambiente controlado: configurar contexto local sin autenticación real
+
+      // En un ambiente controlado, podemos simular el contexto del usuario
+      // sin necesidad de autenticación real de Supabase
+
+      if (mounted) {
+        NotificationService.showSuccess(
+            'Sesión iniciada como $displayName ($role)');
+      }
+    } catch (e) {
+      // No lanzar excepción, continuar con el login
     }
   }
 
@@ -220,7 +268,6 @@ class _DepartmentLoginScreenState extends State<DepartmentLoginScreen> {
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
-                      print('Botón presionado');
                       Navigator.of(context).pushAndRemoveUntil(
                         PageRouteBuilder(
                           pageBuilder:

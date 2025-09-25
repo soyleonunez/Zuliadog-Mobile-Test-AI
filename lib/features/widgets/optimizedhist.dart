@@ -6,9 +6,10 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:zuliadog/core/theme.dart';
 import 'package:zuliadog/core/notifications.dart';
-import 'package:zuliadog/features/data/buscador.dart';
+import 'package:zuliadog/core/pdf_service.dart';
 import 'package:zuliadog/features/data/data_service.dart';
 import 'package:zuliadog/features/widgets/text_editor.dart';
+import 'package:zuliadog/features/widgets/new_patient_form.dart';
 
 final _supa = Supabase.instance.client;
 
@@ -30,9 +31,9 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   final _df = DateFormat('d MMMM y, hh:mm a', 'es');
   final _searchController = TextEditingController();
   String? _currentMrn;
-  final _searchRepository = SearchRepository();
-  List<PatientSearchRow> _searchResults = [];
+  List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
+  String? _clinicId;
 
   // Cache local de historias para optimizar eliminaciones
   List<Map<String, dynamic>> _cachedHistories = [];
@@ -42,11 +43,21 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   void initState() {
     super.initState();
     _currentMrn = widget.mrn;
-    _loadData();
+    _loadClinicId();
+  }
+
+  Future<void> _loadClinicId() async {
+    try {
+      // Para ambiente controlado: usar clinic_id hardcodeado
+      _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203';
+      _loadData();
+    } catch (e) {
+      throw Exception('No se pudo cargar el clinic_id: $e');
+    }
   }
 
   void _loadData() {
-    if (_currentMrn != null) {
+    if (_currentMrn != null && _clinicId != null) {
       _future = _fetchHistories();
       _patientFuture = _fetchPatient();
     } else {
@@ -57,45 +68,36 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchHistories() async {
-    if (_currentMrn == null) return [];
+    if (_currentMrn == null || _clinicId == null) return [];
 
     setState(() {
       _isLoadingHistories = true;
     });
 
     try {
-      // Usar medical_records para obtener todos los bloques de historia
+      // Consultar medical_records con RLS
+
       final rows = await _supa
           .from('medical_records')
-          .select(
-              'id, date, title, summary, doctor, department_code, locked, created_by, created_at, content_delta, patient_id, clinic_id')
-          .eq('clinic_id', widget.clinicId)
+          .select('*')
+          .eq('clinic_id', _clinicId!)
           .eq('patient_id', _currentMrn!)
           .order('date', ascending: false)
           .order('created_at', ascending: false);
 
+      // Los datos ya están en el formato correcto de medical_records
       final histories = List<Map<String, dynamic>>.from(rows as List);
 
-      // Preservar bloques temporales del cache local
-      final tempBlocks =
-          _cachedHistories.where((h) => h['is_temp'] == true).toList();
-
-      // Actualizar cache local con bloques reales + temporales
       setState(() {
-        _cachedHistories = [...histories, ...tempBlocks];
+        _cachedHistories = [
+          ...histories,
+          ..._cachedHistories.where((h) => h['is_temp'] == true).toList()
+        ];
         _isLoadingHistories = false;
       });
 
-      print('🔍 _fetchHistories - tempBlocks count: ${tempBlocks.length}');
-      print('🔍 _fetchHistories - total cached: ${_cachedHistories.length}');
-      for (var block in _cachedHistories) {
-        print(
-            '🔍 _fetchHistories - block: ${block['id']} - is_new: ${block['is_new']} - is_temp: ${block['is_temp']}');
-      }
-
       return histories;
     } catch (e) {
-      print('Error al cargar historias: $e');
       setState(() {
         _isLoadingHistories = false;
       });
@@ -104,26 +106,25 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }
 
   Future<Map<String, dynamic>?> _fetchPatient() async {
-    if (_currentMrn == null) {
+    if (_currentMrn == null || _clinicId == null) {
       return null;
     }
 
     try {
-      // Usar vista pública patients para obtener información completa del paciente
+      // Usar patients_search para obtener información completa del paciente
       final rows = await _supa
-          .from('patients')
+          .from('patients_search')
           .select('*')
-          .eq('clinic_id', widget.clinicId)
-          .eq('mrn', _currentMrn!)
+          .eq('clinic_id', _clinicId!)
+          .eq('history_number', _currentMrn!)
           .limit(1);
 
       if (rows.isNotEmpty) {
-        return Map<String, dynamic>.from(rows.first);
+        final patient = Map<String, dynamic>.from(rows.first);
+        return patient;
       }
-
       return null;
     } catch (e) {
-      print('Error al cargar paciente: $e');
       return null;
     }
   }
@@ -160,8 +161,31 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     }
   }
 
+  String _getSpeciesLabel(String? speciesCode) {
+    switch (speciesCode?.toUpperCase()) {
+      case 'CAN':
+        return 'Canino';
+      case 'FEL':
+        return 'Felino';
+      case 'AVE':
+        return 'Ave';
+      case 'EQU':
+        return 'Equino';
+      case 'BOV':
+        return 'Bovino';
+      case 'POR':
+        return 'Porcino';
+      case 'CAP':
+        return 'Caprino';
+      case 'OVI':
+        return 'Ovino';
+      default:
+        return speciesCode ?? 'Sin especificar';
+    }
+  }
+
   Future<void> _searchPatients(String query) async {
-    if (query.trim().isEmpty) {
+    if (query.trim().isEmpty || _clinicId == null) {
       setState(() {
         _searchResults = [];
         _isSearching = false;
@@ -174,10 +198,25 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     });
 
     try {
-      final results = await _searchRepository.search(query, limit: 10);
+      // Buscar en v_app con filtros múltiples
+      final results = await _supa
+          .from('v_app')
+          .select('*')
+          .eq('clinic_id', _clinicId!)
+          .or('patient_name.ilike.%$query%,patient_mrn.ilike.%$query%,owner_name.ilike.%$query%,record_title.ilike.%$query%')
+          .limit(10);
+
+      // Agrupar por patient_id para evitar duplicados
+      final Map<String, Map<String, dynamic>> uniquePatients = {};
+      for (final record in results) {
+        final patientId = record['patient_id'] ?? record['patient_uuid'];
+        if (patientId != null && !uniquePatients.containsKey(patientId)) {
+          uniquePatients[patientId] = record;
+        }
+      }
 
       setState(() {
-        _searchResults = results;
+        _searchResults = uniquePatients.values.toList();
         _isSearching = false;
       });
     } catch (e) {
@@ -193,7 +232,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 
   Future<void> _createNewBlock() async {
     // Verificar que hay un paciente seleccionado
-    if (_currentMrn == null) {
+    if (_currentMrn == null || _clinicId == null) {
       NotificationService.showWarning('Primero selecciona un paciente');
       return;
     }
@@ -203,8 +242,8 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       final now = DateTime.now();
       final newBlock = {
         'id': 'temp_${now.millisecondsSinceEpoch}', // ID temporal
-        'clinic_id': widget.clinicId,
-        'patient_id': _currentMrn!,
+        'clinic_id': _clinicId!,
+        'patient_id': _currentMrn!, // En medical_records, patient_id es el MRN
         'date': now.toIso8601String().substring(0, 10), // Solo fecha, no hora
         'title': null,
         'summary': null,
@@ -222,10 +261,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       setState(() {
         _cachedHistories.insert(0, newBlock);
       });
-
-      print('🔍 _createNewBlock - newBlock: $newBlock');
-      print(
-          '🔍 _createNewBlock - cachedHistories count: ${_cachedHistories.length}');
 
       NotificationService.showSuccess(
           'Nuevo bloque creado. Puedes editarlo ahora.');
@@ -250,7 +285,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         useSafeArea: true,
         backgroundColor: Colors.white,
         builder: (BuildContext context) => _HistoryEditor(
-          clinicId: widget.clinicId,
+          clinicId: _clinicId!,
           mrn: _currentMrn!,
           record: record,
         ),
@@ -293,9 +328,67 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     Navigator.pushNamed(context, '/pacientes');
   }
 
-  void _exportToPDF() {
-    // TODO: Implementar exportación a PDF
-    NotificationService.showInfo('Exportar a PDF (pendiente)');
+  void _openNewPatientForm() {
+    // Abrir formulario de nuevo paciente
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => NewPatientForm(
+          clinicId: _clinicId ?? '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203',
+          onPatientCreated: () {
+            // Callback cuando se crea un paciente exitosamente
+            Navigator.of(context).pop();
+            NotificationService.showSuccess('Paciente creado exitosamente');
+            // Recargar datos si es necesario
+            _loadData();
+          },
+          onCancel: () {
+            // Callback cuando se cancela la creación
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportToPDF() async {
+    if (_currentMrn == null) {
+      NotificationService.showWarning('Primero selecciona un paciente');
+      return;
+    }
+
+    try {
+      // Mostrar indicador de carga
+      NotificationService.showInfo('Generando PDF...');
+
+      // Obtener datos del paciente
+      final patient = await _patientFuture;
+      if (patient == null) {
+        NotificationService.showError(
+            'No se pudo obtener información del paciente');
+        return;
+      }
+
+      // Obtener historias médicas
+      final histories = await _future;
+
+      // Datos de la clínica (hardcodeados por ahora)
+      const clinicName = 'ZULIA DOG - Clínica Veterinaria';
+      const clinicAddress = 'Dirección de la clínica';
+      const clinicPhone = 'Teléfono de la clínica';
+
+      // Exportar PDF
+      await PDFService.exportMedicalHistory(
+        patient: patient,
+        medicalRecords: histories,
+        clinicName: clinicName,
+        clinicAddress: clinicAddress,
+        clinicPhone: clinicPhone,
+      );
+
+      NotificationService.showSuccess('PDF generado correctamente');
+    } catch (e) {
+      NotificationService.showError('Error al generar PDF: $e');
+    }
   }
 
   /// Elimina una historia del cache local de manera eficiente
@@ -352,7 +445,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                   data: item,
                   tableName: 'medical_records',
                   recordId: item['id'],
-                  clinicId: widget.clinicId,
+                  clinicId: _clinicId!,
                   dateFormat: _df,
                   onEdit: () => _openHistoryEditor(record: item),
                   onSaved: () {
@@ -411,12 +504,18 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     NotificationService.showInfo('Seleccionar Imagen de Raza (pendiente)');
   }
 
-  Widget _buildSearchResultItem(PatientSearchRow patient) {
-    final name = patient.patientName;
-    final species = patient.species ?? 'No especificada';
-    final breed = patient.breed ?? 'No especificada';
-    final mrn = patient.historyNumber ?? 'N/A';
-    final ownerName = patient.ownerName ?? 'No especificado';
+  Widget _buildSearchResultItem(Map<String, dynamic> patient) {
+    final name = patient['patient_name'] ??
+        patient['paciente_name_snapshot'] ??
+        'Sin nombre';
+    final species = _getSpeciesLabel(patient['patient_species_code']);
+    final breed =
+        patient['breed_label'] ?? patient['breed'] ?? 'Sin especificar';
+    final mrn =
+        patient['patient_mrn'] ?? patient['history_number_snapshot'] ?? 'N/A';
+    final ownerName = patient['owner_name'] ??
+        patient['owner_name_snapshot'] ??
+        'No especificado';
 
     return InkWell(
       onTap: () {
@@ -438,8 +537,8 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
           children: [
             // Avatar con imagen de raza o fallback por especie
             DataService().buildBreedImageWidget(
-              breedId: patient.breedId,
-              species: patient.species,
+              breedId: patient['patient_breed_id'],
+              species: species,
               width: 40,
               height: 40,
               borderRadius: 20,
@@ -492,31 +591,28 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.neutral50,
-      body: Column(
-        children: [
-          // Topbar para toda la ventana
-          _buildTopBar(),
-          // Contenido principal
-          Expanded(
-            child: Row(
-              children: [
-                // Columna izquierda: Historias Médicas (70%)
-                Expanded(
-                  flex: 7,
-                  child: _buildHistoriesColumn(),
-                ),
-                // Columna derecha: Ficha del Paciente (30%)
-                Expanded(
-                  flex: 3,
-                  child: _buildPatientPanel(),
-                ),
-              ],
-            ),
+    return Column(
+      children: [
+        // Topbar para toda la ventana
+        _buildTopBar(),
+        // Contenido principal
+        Expanded(
+          child: Row(
+            children: [
+              // Columna izquierda: Historias Médicas (70%)
+              Expanded(
+                flex: 7,
+                child: _buildHistoriesColumn(),
+              ),
+              // Columna derecha: Ficha del Paciente (30%)
+              Expanded(
+                flex: 3,
+                child: _buildPatientPanel(),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -604,19 +700,17 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
             onTap: _currentMrn == null
                 ? null
                 : () {
-                    print(
-                        '🔍 Botón Nuevo Bloque presionado - _currentMrn: $_currentMrn');
                     _createNewBlock();
                   },
           ),
           const SizedBox(width: 8),
-          // 2. Nueva Historia (navegación a pacientes)
+          // 2. Nueva Historia (formulario de nuevo paciente)
           _buildQuickActionButton(
             icon: Iconsax.user_add,
             text: 'Nueva Historia',
             tooltip: 'Crear Nuevo Paciente',
             color: const Color(0xFF3B82F6),
-            onTap: () => _navigateToPatients(),
+            onTap: () => _openNewPatientForm(),
           ),
           const SizedBox(width: 8),
           // 3. Exportar PDF
@@ -715,7 +809,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 
   Widget _buildHistoriesColumn() {
     return Container(
-      color: const Color(0xFFF8F9FA), // background-light
+      color: AppTheme.neutral50, // background-light
       child: Column(
         children: [
           // Resultados de búsqueda
@@ -893,7 +987,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                                 .buildBreedImageWidget(
                                               breedId: patient['breed_id']
                                                   ?.toString(),
-                                              species: patient['species']
+                                              species: patient['species_code']
                                                   ?.toString(),
                                               width: 64,
                                               height: 64,
@@ -912,7 +1006,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                               children: [
                                                 Expanded(
                                                   child: Text(
-                                                    patient['name'] ??
+                                                    patient['patient_name'] ??
                                                         'Sin nombre',
                                                     style: const TextStyle(
                                                       fontSize: 20,
@@ -952,7 +1046,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              'MRN: ${patient['mrn']?.toString().padLeft(6, '0') ?? _currentMrn!.padLeft(6, '0')}',
+                                              'MRN: ${patient['history_number']?.toString().padLeft(6, '0') ?? _currentMrn!.padLeft(6, '0')}',
                                               style: const TextStyle(
                                                 fontSize: 14,
                                                 color: Color(0xFF6B7280),
@@ -965,10 +1059,14 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                   ),
                                   const SizedBox(height: 16),
                                   // Información básica en dos filas
-                                  _buildPatientInfoRow('Especie',
-                                      patient['species'] ?? 'No especificada'),
-                                  _buildPatientInfoRow('Raza',
-                                      patient['breed'] ?? 'No especificada'),
+                                  _buildPatientInfoRow(
+                                      'Especie',
+                                      patient['species_label'] ??
+                                          'No especificada'),
+                                  _buildPatientInfoRow(
+                                      'Raza',
+                                      patient['breed_label'] ??
+                                          'No especificada'),
                                   _buildPatientInfoRow('Sexo',
                                       patient['sex'] ?? 'No especificado'),
                                   _buildPatientInfoRow(
@@ -1190,7 +1288,6 @@ class _HistoryEditorState extends State<_HistoryEditor> {
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      print('Error al guardar en editor: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al guardar: $e')),
