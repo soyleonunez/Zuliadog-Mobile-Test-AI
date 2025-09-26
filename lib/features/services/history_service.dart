@@ -36,11 +36,10 @@ class HistoryService {
         }
       }
 
-      // 3. Verificar vistas
+      // 3. Verificar vistas esenciales
       final views = [
-        'v_patient_owner',
-        'v_records_full',
-        'v_app' // Vista pública optimizada para búsquedas
+        'v_app', // Vista de pacientes optimizada para búsquedas
+        'v_hosp' // Vista de hospitalización
       ];
       final viewStatus = <String, bool>{};
 
@@ -324,21 +323,14 @@ class HistoryService {
 
       final q = query.trim();
 
-      // Usar v_app que tiene todos los datos necesarios
+      // Usar v_app y misma lógica simple que pacientes.dart
       var queryBuilder =
           _supa.from('v_app').select('*').eq('clinic_id', clinicId);
 
       if (q.isNotEmpty) {
-        // Búsqueda con OR compuesto para v_app
-        final ors = <String>[
-          "patient_name.ilike.%$q%",
-          "patient_mrn.ilike.%$q%",
-          "owner_name.ilike.%$q%",
-          "record_title.ilike.%$q%",
-          "patient_mrn.eq.$q", // Búsqueda exacta en MRN
-        ];
-
-        queryBuilder = queryBuilder.or(ors.join(','));
+        // Usar la misma lógica simple que funciona en pacientes.dart
+        queryBuilder = queryBuilder.or(
+            'patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%');
       }
 
       final rows = await queryBuilder
@@ -401,11 +393,11 @@ class HistoryService {
         var queryBuilder =
             _supa.from('v_app').select('*').eq('clinic_id', clinicId);
 
-        // Si parece ser un UUID, buscar por patient_id, sino por patient_mrn
+        // Si parece ser un UUID, buscar por patient_id, sino por history_number
         if (patientMrn.contains('-')) {
           queryBuilder = queryBuilder.eq('patient_id', patientMrn);
         } else {
-          queryBuilder = queryBuilder.eq('patient_mrn', patientMrn);
+          queryBuilder = queryBuilder.eq('history_number', patientMrn);
         }
 
         final rows = await queryBuilder.limit(1);
@@ -926,7 +918,7 @@ class PatientSearchRow {
       patientId: json['patient_id']?.toString() ??
           json['patient_uuid']?.toString() ??
           '',
-      historyNumber: json['patient_mrn']?.toString() ??
+      historyNumber: json['history_number']?.toString() ??
           json['history_number_snapshot']?.toString(),
       patientName: json['patient_name']?.toString() ??
           json['paciente_name_snapshot']?.toString() ??

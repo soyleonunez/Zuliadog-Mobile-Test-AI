@@ -304,12 +304,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
 
     try {
-      // Buscar en v_app con filtros múltiples
+      // Buscar en v_app con filtros múltiples (mismo patrón que funciona en historias)
       final results = await Supabase.instance.client
           .from('v_app')
           .select('*')
           .eq('clinic_id', _clinicId!)
-          .or('patient_name.ilike.%$query%,patient_mrn.ilike.%$query%,owner_name.ilike.%$query%,record_title.ilike.%$query%')
+          .or('patient_name.ilike.%$query%,history_number.ilike.%$query%,owner_name.ilike.%$query%')
           .limit(10);
 
       // Agrupar por patient_id para evitar duplicados
@@ -565,8 +565,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         patient['paciente_name_snapshot'] ??
         'Sin nombre';
     final species = _getSpeciesLabel(patient['patient_species_code']);
-    final mrn =
-        patient['patient_mrn'] ?? patient['history_number_snapshot'] ?? 'N/A';
+    final mrn = patient['history_number'] ??
+        patient['history_number_snapshot'] ??
+        'N/A';
     final ownerName = patient['owner_name'] ??
         patient['owner_name_snapshot'] ??
         'No especificado';

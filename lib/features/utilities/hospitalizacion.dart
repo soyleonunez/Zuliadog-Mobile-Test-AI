@@ -203,7 +203,8 @@ class HospitalizedPatient {
       breedId: data['breed_id'],
       breedLabel: data['breed_label'] ?? 'Sin especificar',
       breedImageUrl: data['breed_image_url'],
-      temperament: data['temperament'],
+      temperament:
+          data['temper'] ?? data['temperament'] ?? 'Suave', // Ensure fallback
       ownerId: data['owner_id'],
       ownerName: data['owner_name'],
       ownerPhone: data['owner_phone'],
@@ -258,6 +259,7 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
   // --- Estado UI ---
   HospitalizationView _currentView = HospitalizationView.patients;
   String? _selectedPatientId;
+  String? _selectedHospitalizationId;
   String _selectedTreatmentId = '';
   DateTime _currentWeek = DateTime.now();
 
@@ -284,13 +286,55 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
   }
 
   void _initializeStreams() {
-    // Stream para pacientes hospitalizados usando v_hosp (vista pública)
+    // Stream para pacientes hospitalizados usando v_hosp (vista original)
     _patientsStream = _supa
         .from('v_hosp')
-        .stream(primaryKey: ['patient_id']).map((data) => data
-            .where((item) => item['hospitalization_status'] == 'active')
-            .map((item) => HospitalizedPatient.fromJson(item))
-            .toList());
+        .stream(primaryKey: ['patient_id']).asyncExpand((data) async* {
+      final hospitalizedPatients = data
+          .where((item) => item['hospitalization_status'] == 'active')
+          .toList();
+
+      List<Map<String, dynamic>> enrichedPatients = [];
+
+      for (final item in hospitalizedPatients) {
+        try {
+          // Obtener hospitalization_id real desde tabla hospitalization para writings
+          var hospitalizationData = await _supa
+              .from('hospitalization')
+              .select('id')
+              .eq('patient_id', item['patient_id'])
+              .eq('status', 'active')
+              .maybeSingle();
+
+          // Obtener temper desde tabla patients
+          var patientTemper = await _supa
+              .from('patients')
+              .select('temper')
+              .eq('id', item['patient_id'])
+              .maybeSingle();
+
+          // Enriquecer datos originales de v_hosp con hospitalization_id real
+          final enrichedItem = Map<String, dynamic>.from(item);
+          enrichedItem['hospitalization_id'] = hospitalizationData?['id'];
+
+          // Asegurar que el temper viene directamente de patients.temper
+          if (patientTemper != null && patientTemper['temper'] != null) {
+            enrichedItem['temper'] = patientTemper['temper'];
+          }
+
+          enrichedPatients.add(enrichedItem);
+        } catch (e) {
+          print(
+              'Error al enriquecer datos de paciente ${item['patient_id']}: $e');
+          // En caso de error, usar datos originales de v_hosp
+          enrichedPatients.add(Map<String, dynamic>.from(item));
+        }
+      }
+
+      yield enrichedPatients
+          .map((item) => HospitalizedPatient.fromJson(item))
+          .toList();
+    });
   }
 
   @override
@@ -325,11 +369,10 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
   }
 
   Widget _buildPatientsView() {
-    return Row(
+    return Column(
       children: [
-        // Panel izquierdo: Pacientes + Calendario
+        // Panel principal: Pacientes + Calendario - Sin panel de detalles por defecto
         Expanded(
-          flex: 3,
           child: Column(
             children: [
               // Cards de pacientes
@@ -340,6 +383,7 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
                 onShowDischargeDialog: _showDischargeDialog,
                 onShowHistory: _showHistory,
                 onShowTreatment: _showTreatment,
+                onLoadPatientTreatments: _loadPatientTreatmentsInCalendar,
               ),
 
               // Calendario semanal
@@ -347,10 +391,11 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
                 child: CalendarGanttWidget(
                   currentWeek: _currentWeek,
                   selectedTreatmentId: _selectedTreatmentId,
+                  selectedPatientId: _selectedPatientId,
                   onTreatmentTap: (treatmentId) {
                     setState(() {
                       _selectedTreatmentId = treatmentId;
-                      _selectedPatientId = null;
+                      // Mantener _selectedPatientId para seguir mostrando tratamientos del paciente
                     });
                   },
                   onTreatmentEdit: _editTreatment,
@@ -359,16 +404,6 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
               ),
             ],
           ),
-        ),
-
-        // Panel derecho: Detalles
-        DetailPanelWidget(
-          selectedTreatmentId: _selectedTreatmentId,
-          selectedPatientId: _selectedPatientId,
-          onClose: () => setState(() {
-            _selectedTreatmentId = '';
-            _selectedPatientId = null;
-          }),
         ),
       ],
     );
@@ -382,6 +417,7 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
           flex: 2,
           child: TreatmentsWidget(
             selectedPatientId: _selectedPatientId,
+            selectedHospitalizationId: _selectedHospitalizationId,
             onTreatmentTap: (treatmentId) {
               setState(() {
                 _selectedTreatmentId = treatmentId;
@@ -392,15 +428,16 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
           ),
         ),
 
-        // Panel derecho: Detalles
-        DetailPanelWidget(
-          selectedTreatmentId: _selectedTreatmentId,
-          selectedPatientId: _selectedPatientId,
-          onClose: () => setState(() {
-            _selectedTreatmentId = '';
-            _selectedPatientId = null;
-          }),
-        ),
+        // Panel derecho: Detalles (solo se muestra si hay tratamientos seleccionados)
+        if (_selectedTreatmentId.isNotEmpty)
+          DetailPanelWidget(
+            selectedTreatmentId: _selectedTreatmentId,
+            selectedPatientId: _selectedPatientId,
+            onClose: () => setState(() {
+              _selectedTreatmentId = '';
+              _selectedPatientId = null;
+            }),
+          ),
       ],
     );
   }
@@ -414,10 +451,10 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
           child: CalendarGanttWidget(
             currentWeek: _currentWeek,
             selectedTreatmentId: _selectedTreatmentId,
+            selectedPatientId: _selectedPatientId,
             onTreatmentTap: (treatmentId) {
               setState(() {
                 _selectedTreatmentId = treatmentId;
-                _selectedPatientId = null;
               });
             },
             onTreatmentEdit: _editTreatment,
@@ -581,11 +618,22 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
     );
   }
 
-  // Función para mostrar tratamientos del paciente
+  // Función para cargar datos del paciente en calendario para ver tratamientos
+  void _loadPatientTreatmentsInCalendar(HospitalizedPatient patient) {
+    setState(() {
+      _selectedPatientId = patient.id;
+      _selectedHospitalizationId = patient.hospitalizationId;
+      // No cambia a vista gantt automáticamente, deja que el usuario vea datos en calendario actual
+    });
+  }
+
+  // Función para mostrar tratamientos del paciente - cambia a vista gantt/tratamientos
   void _showTreatment(HospitalizedPatient patient) {
     setState(() {
       _selectedPatientId = patient.id;
-      _currentView = HospitalizationView.gantt;
+      _selectedHospitalizationId = patient.hospitalizationId;
+      _currentView = HospitalizationView
+          .gantt; // Navega a la vista gantt donde están los tratamientos
     });
   }
 

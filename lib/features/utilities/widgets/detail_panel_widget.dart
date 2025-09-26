@@ -161,28 +161,60 @@ class DetailPanelWidget extends StatelessWidget {
               // Detalles del tratamiento
               _buildDetailRow('Medicamento',
                   treatment['medication_name'] ?? 'No especificado'),
-              _buildDetailRow(
-                  'Dosificación', treatment['dosage'] ?? 'No especificada'),
+              _buildDetailRow('Dosificación',
+                  treatment['medication_dosage'] ?? 'No especificada'),
               _buildDetailRow('Vía',
                   treatment['administration_route'] ?? 'No especificada'),
-              _buildDetailRow('Presentación',
-                  treatment['presentation'] ?? 'No especificada'),
+              _buildDetailRow(
+                  'Frecuencia', treatment['frequency'] ?? 'No especificada'),
+              _buildDetailRow(
+                  'Duración', '${treatment['duration_days'] ?? 0} días'),
 
-              if (treatment['scheduled_date'] != null)
+              if (treatment['scheduled_date'] != null &&
+                  treatment['scheduled_time'] != null)
                 _buildDetailRow(
                   'Fecha Programada',
-                  DateFormat('dd/MM/yyyy HH:mm').format(
-                      DateTime.parse(treatment['scheduled_date'].toString())),
+                  DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(
+                      '${treatment['scheduled_date']} ${treatment['scheduled_time']}')),
+                )
+              else if (treatment['scheduled_date'] != null)
+                _buildDetailRow(
+                  'Fecha',
+                  DateFormat('dd/MM/yyyy')
+                      .format(DateTime.parse(treatment['scheduled_date'])),
                 ),
 
+              _buildDetailRow(
+                  'Tipo', treatment['follow_type'] ?? 'Sin especificar'),
               _buildDetailRow('Estado', _getStatusLabel(treatment['status'])),
               _buildDetailRow(
+                  'Completado',
+                  treatment['completion_status']?.toString() ??
+                      'No especificado'),
+              _buildDetailRow(
                   'Prioridad', _getPriorityLabel(treatment['priority'])),
-              _buildDetailRow('Médico Responsable',
-                  treatment['responsible_doctor'] ?? 'No asignado'),
 
               if (treatment['observations'] != null)
                 _buildDetailRow('Observaciones', treatment['observations']),
+
+              if (treatment['recommendations'] != null)
+                _buildDetailRow(
+                    'Recomendaciones', treatment['recommendations']),
+
+              if (treatment['effectiveness_rating'] != null)
+                _buildDetailRow('Calificación de Efectividad',
+                    '${treatment['effectiveness_rating']}/5'),
+
+              if (treatment['side_effects'] != null)
+                _buildDetailRow(
+                    'Efectos Secundarios', treatment['side_effects']),
+
+              if (treatment['next_evaluation_date'] != null)
+                _buildDetailRow(
+                  'Próxima Evaluación',
+                  DateFormat('dd/MM/yyyy').format(
+                      DateTime.parse(treatment['next_evaluation_date'])),
+                ),
 
               const SizedBox(height: 24),
 

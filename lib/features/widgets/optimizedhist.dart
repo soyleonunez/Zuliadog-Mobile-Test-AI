@@ -120,9 +120,9 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     }
 
     try {
-      // Usar patients_search para obtener información completa del paciente
+      // Usar v_app para obtener información completa del paciente
       final rows = await _supa
-          .from('patients_search')
+          .from('v_app')
           .select('*')
           .eq('clinic_id', _clinicId!)
           .eq('history_number', _currentMrn!)
@@ -207,12 +207,14 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     });
 
     try {
-      // Buscar en v_app con filtros múltiples
+      final q = query.trim();
+
+      // Ejecutar búsqueda en v_app usando misma lógica simple que pacientes.dart
       final results = await _supa
           .from('v_app')
           .select('*')
           .eq('clinic_id', _clinicId!)
-          .or('patient_name.ilike.%$query%,patient_mrn.ilike.%$query%,owner_name.ilike.%$query%,record_title.ilike.%$query%')
+          .or('patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%')
           .limit(10);
 
       // Agrupar por patient_id para evitar duplicados
@@ -520,8 +522,9 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     final species = _getSpeciesLabel(patient['patient_species_code']);
     final breed =
         patient['breed_label'] ?? patient['breed'] ?? 'Sin especificar';
-    final mrn =
-        patient['patient_mrn'] ?? patient['history_number_snapshot'] ?? 'N/A';
+    final mrn = patient['history_number'] ??
+        patient['history_number_snapshot'] ??
+        'N/A';
     final ownerName = patient['owner_name'] ??
         patient['owner_name_snapshot'] ??
         'No especificado';
@@ -1078,6 +1081,8 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                           'No especificada'),
                                   _buildPatientInfoRow('Sexo',
                                       patient['sex'] ?? 'No especificado'),
+                                  _buildPatientInfoRow('Temperamento',
+                                      patient['temper'] ?? 'No especificado'),
                                   _buildPatientInfoRow(
                                       'Edad',
                                       _calculateAge(

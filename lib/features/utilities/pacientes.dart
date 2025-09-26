@@ -185,7 +185,7 @@ class _PatientsDashboardPageState extends State<PatientsDashboardPage> {
       if (q.isNotEmpty) {
         // Buscar en múltiples campos de v_app
         query = query.or(
-            'patient_name.ilike.%$q%,patient_mrn.ilike.%$q%,owner_name.ilike.%$q%,record_title.ilike.%$q%');
+            'patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%');
       }
 
       switch (_statusFilter) {

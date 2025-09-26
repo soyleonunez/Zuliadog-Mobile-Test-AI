@@ -29,10 +29,13 @@ class _TreatmentFormWidgetState extends State<TreatmentFormWidget> {
   final _dosageController = TextEditingController();
   final _frequencyController = TextEditingController();
   final _durationController = TextEditingController();
+  final _observationsController = TextEditingController();
+  final _recommendationsController = TextEditingController();
 
   String _selectedPresentation = 'Tableta';
   String _selectedRoute = 'Oral';
   String _selectedPriority = 'normal';
+  List<String> _selectedFrequencies = [];
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
 
@@ -64,13 +67,130 @@ class _TreatmentFormWidgetState extends State<TreatmentFormWidget> {
 
   final List<String> _priorities = ['low', 'normal', 'high', 'urgent'];
 
+  final List<String> _frequencyOptions = [
+    'Cada 6 horas',
+    'Cada 8 horas',
+    'Cada 12 horas',
+    'Cada 24 horas',
+    'Mañana',
+    'Noche',
+    'Mañana y noche',
+    'Personalizado'
+  ];
+
   @override
   void dispose() {
     _medicationNameController.dispose();
     _dosageController.dispose();
     _frequencyController.dispose();
     _durationController.dispose();
+    _observationsController.dispose();
+    _recommendationsController.dispose();
     super.dispose();
+  }
+
+  /// Genera múltiples entradas de treatment basadas en frecuencias para recordatorios automáticos
+  List<Map<String, dynamic>> _generateTreatmentReminders({
+    required Map<String, dynamic> baseTreatment,
+    required List<String> frequencies,
+  }) {
+    List<Map<String, dynamic>> reminders = [];
+    final baseDate = DateTime.parse(baseTreatment['scheduled_date']);
+    final durationDays = baseTreatment['duration_days'] ?? 7;
+
+    for (final frequency in frequencies) {
+      List<DateTime> scheduledDates = _generateScheduledDates(
+        baseDate: baseDate,
+        frequency: frequency,
+        durationDays: durationDays,
+      );
+
+      for (final scheduledDate in scheduledDates) {
+        final reminderData = Map<String, dynamic>.from(baseTreatment);
+        // Remove id field completely to allow auto-generation
+        reminderData.remove('id');
+        reminderData['scheduled_date'] =
+            scheduledDate.toIso8601String().split('T')[0];
+        reminderData['follow_type'] = 'medication_reminder';
+        reminderData['frequency'] = frequency;
+        reminders.add(reminderData);
+      }
+    }
+
+    return reminders;
+  }
+
+  /// Calcula las fechas propuestas según la frecuencia
+  List<DateTime> _generateScheduledDates({
+    required DateTime baseDate,
+    required String frequency,
+    required int durationDays,
+  }) {
+    List<DateTime> scheduledDates = [];
+    final endDate = baseDate.add(Duration(days: durationDays));
+
+    switch (frequency) {
+      case 'Cada 6 horas':
+        DateTime current = baseDate;
+        while (current.isBefore(endDate)) {
+          scheduledDates.add(current);
+          current = current.add(Duration(hours: 6));
+        }
+        break;
+      case 'Cada 8 horas':
+        DateTime current = baseDate;
+        while (current.isBefore(endDate)) {
+          scheduledDates.add(current);
+          current = current.add(Duration(hours: 8));
+        }
+        break;
+      case 'Cada 12 horas':
+        DateTime current = baseDate;
+        while (current.isBefore(endDate)) {
+          scheduledDates.add(current);
+          current = current.add(Duration(hours: 12));
+        }
+        break;
+      case 'Cada 24 horas':
+        DateTime current = baseDate;
+        while (current.isBefore(endDate)) {
+          scheduledDates.add(current);
+          current = current.add(Duration(days: 1));
+        }
+        break;
+      case 'Mañana':
+        DateTime current = baseDate;
+        while (current.isBefore(endDate)) {
+          scheduledDates
+              .add(DateTime(current.year, current.month, current.day, 8, 0));
+          current = current.add(Duration(days: 1));
+        }
+        break;
+      case 'Noche':
+        DateTime current = baseDate;
+        while (current.isBefore(endDate)) {
+          scheduledDates
+              .add(DateTime(current.year, current.month, current.day, 20, 0));
+          current = current.add(Duration(days: 1));
+        }
+        break;
+      case 'Mañana y noche':
+        DateTime current = baseDate;
+        while (current.isBefore(endDate)) {
+          scheduledDates
+              .add(DateTime(current.year, current.month, current.day, 8, 0));
+          scheduledDates
+              .add(DateTime(current.year, current.month, current.day, 20, 0));
+          current = current.add(Duration(days: 1));
+        }
+        break;
+      default:
+        // Personalizado - usar solo la fecha original
+        scheduledDates.add(baseDate);
+        break;
+    }
+
+    return scheduledDates;
   }
 
   @override
@@ -239,23 +359,13 @@ class _TreatmentFormWidgetState extends State<TreatmentFormWidget> {
         ),
         const SizedBox(height: 16),
 
-        // Frecuencia y duración
+        // Frecuencia múltiple
+        _buildFrequencySection(),
+        const SizedBox(height: 16),
+
+        // Duración e información adicional
         Row(
           children: [
-            Expanded(
-              child: _buildTextField(
-                controller: _frequencyController,
-                label: 'Frecuencia',
-                hint: 'Ej: Cada 8 horas, Diario',
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'La frecuencia es requerida';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
             Expanded(
               child: _buildTextField(
                 controller: _durationController,
@@ -272,6 +382,43 @@ class _TreatmentFormWidgetState extends State<TreatmentFormWidget> {
                   }
                   return null;
                 },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildTextField(
+                controller: _frequencyController,
+                label: 'Frecuencia personalizada',
+                hint: 'Ej: Dos veces al día',
+                validator: (value) {
+                  // Validación opcional ya que hay opciones múltiples
+                  return null;
+                },
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // Observaciones y Recomendaciones
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(
+                controller: _observationsController,
+                label: 'Observaciones',
+                hint: 'Notas adicionales sobre el tratamiento',
+                validator: null,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildTextField(
+                controller: _recommendationsController,
+                label: 'Recomendaciones',
+                hint: 'Recomendaciones para el seguimiento',
+                validator: null,
               ),
             ),
           ],
@@ -323,14 +470,46 @@ class _TreatmentFormWidgetState extends State<TreatmentFormWidget> {
           ),
         ),
         const SizedBox(height: 16),
-        _buildDropdown(
-          label: 'Nivel de Prioridad',
+
+        // Etiqueta para el dropdown de prioridad
+        Text(
+          'Nivel de Prioridad',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: home.AppColors.neutral900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
           value: _selectedPriority,
-          items: _priorities.map((p) => _getPriorityLabel(p)).toList(),
+          items: _priorities
+              .map((priority) => DropdownMenuItem<String>(
+                    value: priority,
+                    child: Text(_getPriorityLabel(priority)),
+                  ))
+              .toList(),
           onChanged: (value) {
-            final index = _priorities.indexOf(value!);
-            setState(() => _selectedPriority = _priorities[index]);
+            if (value != null) {
+              setState(() => _selectedPriority = value);
+            }
           },
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: home.AppColors.neutral200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: home.AppColors.neutral200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: home.AppColors.primary500),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
         ),
       ],
     );
@@ -593,25 +772,137 @@ class _TreatmentFormWidgetState extends State<TreatmentFormWidget> {
 
   void _submitForm() {
     if (_formKey.currentState!.validate()) {
+      // Validación adicional para frecuencias
+      if (_selectedFrequencies.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Selecciona al menos una frecuencia de aplicación'),
+            backgroundColor: home.AppColors.danger500,
+          ),
+        );
+        return;
+      }
+
       final treatmentData = {
         'clinic_id': widget.clinicId,
         'patient_id': widget.patientId,
-        'hospitalization_id': widget.hospitalizationId,
+        'hospitalization_id': widget.hospitalizationId.isNotEmpty
+            ? widget.hospitalizationId
+            : null,
+        // Campos específicos de la tabla follows
+        'completion_type': 'treatment_given',
+        'completion_status':
+            'completed', // El tratamiento se ha programado con éxito
+        'follow_type': 'treatment',
+
+        // Información del medicamento
         'medication_name': _medicationNameController.text,
-        'presentation': _selectedPresentation,
-        'dosage': _dosageController.text,
+        'medication_dosage': _dosageController.text,
         'administration_route': _selectedRoute,
+
+        // Programación
         'scheduled_date': _selectedDate.toIso8601String().split('T')[0],
         'scheduled_time':
             '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}:00',
-        'frequency': _frequencyController.text,
+        'frequency': _selectedFrequencies
+            .join(', '), // Múltiples frecuencias separadas por coma
         'duration_days': int.parse(_durationController.text),
         'priority': _selectedPriority,
         'status': 'scheduled',
+
+        // Campos adicionales
+        'observations': _observationsController.text.isNotEmpty
+            ? _observationsController.text
+            : null,
+        'recommendations': _recommendationsController.text.isNotEmpty
+            ? _recommendationsController.text
+            : null,
+
+        // Información del responsable (si existe)
+        'completed_by': null, // Se podría obtener del usuario actual
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+
+        // Datos de recordatorios automáticos generados
+        'reminders': _generateTreatmentReminders(
+          baseTreatment: {
+            'clinic_id': widget.clinicId,
+            'patient_id': widget.patientId,
+            'hospitalization_id': widget.hospitalizationId,
+            'medication_name': _medicationNameController.text,
+            'medication_dosage': _dosageController.text,
+            'administration_route': _selectedRoute,
+            'duration_days': int.parse(_durationController.text),
+            'priority': _selectedPriority,
+            'scheduled_date': _selectedDate.toIso8601String().split('T')[0],
+            'scheduled_time':
+                '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}:00',
+            'observations': _observationsController.text.isNotEmpty
+                ? _observationsController.text
+                : null,
+            'recommendations': _recommendationsController.text.isNotEmpty
+                ? _recommendationsController.text
+                : null,
+          },
+          frequencies: _selectedFrequencies,
+        ),
       };
 
       widget.onSubmit?.call(treatmentData);
     }
+  }
+
+  Widget _buildFrequencySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Frecuencia de Aplicación',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: home.AppColors.neutral900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _frequencyOptions.map((frequency) {
+            return FilterChip(
+              label: Text(frequency),
+              selected: _selectedFrequencies.contains(frequency),
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedFrequencies.add(frequency);
+                  } else {
+                    _selectedFrequencies.remove(frequency);
+                  }
+                });
+              },
+              checkmarkColor: Colors.white,
+              selectedColor: home.AppColors.primary500,
+              labelStyle: TextStyle(
+                color: _selectedFrequencies.contains(frequency)
+                    ? Colors.white
+                    : home.AppColors.neutral700,
+              ),
+            );
+          }).toList(),
+        ),
+        if (_selectedFrequencies.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Selecciona al menos una frecuencia',
+              style: TextStyle(
+                fontSize: 12,
+                color: home.AppColors.danger500,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   String _getPriorityLabel(String priority) {

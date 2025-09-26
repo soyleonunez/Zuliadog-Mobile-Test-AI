@@ -9,6 +9,7 @@ final _supa = Supabase.instance.client;
 
 class TreatmentsWidget extends StatefulWidget {
   final String? selectedPatientId;
+  final String? selectedHospitalizationId;
   final Function(String) onTreatmentTap;
   final Function(String) onTreatmentEdit;
   final Function(String) onTreatmentComplete;
@@ -16,6 +17,7 @@ class TreatmentsWidget extends StatefulWidget {
   const TreatmentsWidget({
     super.key,
     this.selectedPatientId,
+    this.selectedHospitalizationId,
     required this.onTreatmentTap,
     required this.onTreatmentEdit,
     required this.onTreatmentComplete,
@@ -72,7 +74,7 @@ class _TreatmentsWidgetState extends State<TreatmentsWidget> {
           ),
           const SizedBox(width: 8),
           Text(
-            'Tratamientos',
+            'Tratamientos y Medicamentos',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -371,7 +373,7 @@ class _TreatmentsWidgetState extends State<TreatmentsWidget> {
           height: 500,
           child: TreatmentFormWidget(
             patientId: widget.selectedPatientId ?? '',
-            hospitalizationId: widget.selectedPatientId ?? '',
+            hospitalizationId: widget.selectedHospitalizationId ?? '',
             clinicId: '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203',
             onSubmit: (treatmentData) {
               _addTreatment(treatmentData);
@@ -386,14 +388,45 @@ class _TreatmentsWidgetState extends State<TreatmentsWidget> {
 
   Future<void> _addTreatment(Map<String, dynamic> treatmentData) async {
     try {
-      // Agregar follow_type para identificar como tratamiento
-      treatmentData['follow_type'] = 'treatment';
+      // Separar los datos principales de los recordatorios
+      final reminders =
+          treatmentData.remove('reminders') as List<Map<String, dynamic>>? ??
+              [];
 
-      await _supa.from('follows').insert(treatmentData);
+      // Asegurar que no incluye id null para auto-generation principal
+      final cleanTreatmentData = Map<String, dynamic>.from(treatmentData);
+      cleanTreatmentData.remove('id');
+
+      // Insertar el tratamiento principal
+      await _supa.from('follows').insert(cleanTreatmentData);
+
+      // Insertar los recordatorios automáticos si existen
+      if (reminders.isNotEmpty) {
+        final remindersData = reminders.map((reminder) {
+          // Crear una copia limpia sin id nulo
+          final cleanReminder = Map<String, dynamic>.from(reminder);
+          // Remover id nulo si existe
+          cleanReminder.remove('id');
+
+          // Agregar campos requeridos para recordatorios
+          cleanReminder['clinic_id'] = treatmentData['clinic_id'];
+          cleanReminder['patient_id'] = treatmentData['patient_id'];
+          cleanReminder['hospitalization_id'] =
+              treatmentData['hospitalization_id'];
+          cleanReminder['completion_type'] = 'medication_administered';
+          cleanReminder['completion_status'] = 'scheduled';
+          cleanReminder['created_at'] =
+              DateTime.now().toUtc().toIso8601String();
+          return cleanReminder;
+        }).toList();
+
+        await _supa.from('follows').insert(remindersData);
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Tratamiento agregado exitosamente'),
+          content: Text(
+              'Tratamiento agregado exitosamente${reminders.isNotEmpty ? ' con ${reminders.length} recordatorios' : ''}'),
           backgroundColor: home.AppColors.success500,
         ),
       );

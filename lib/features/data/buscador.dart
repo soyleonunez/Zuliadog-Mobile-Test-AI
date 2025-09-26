@@ -43,8 +43,6 @@ class PatientSearchRow {
           j['paciente_name_snapshot']?.toString() ??
           '',
       historyNumber: j['history_number']?.toString() ??
-          j['patient_mrn']?.toString() ??
-          j['mrn']?.toString() ??
           j['history_number_snapshot']?.toString(),
       mrnInt: j['mrn_int'] is num ? (j['mrn_int'] as num).toInt() : null,
       ownerName:
@@ -85,10 +83,9 @@ class PatientSearchRow {
 class SearchRepository {
   final SupabaseClient _db = Supabase.instance.client;
 
-  /// Busca en v_app por MRN exacto, MRN numérico, nombre de paciente o nombre de dueño.
+  /// Busca en v_app por MRN exacto, nombre de paciente o nombre de dueño.
   Future<List<PatientSearchRow>> search(String query, {int limit = 30}) async {
     final q = query.trim();
-    final isNumeric = int.tryParse(q.replaceAll(RegExp(r'\D'), '')) != null;
 
     final baseSel = _db.from('v_app').select('*');
 
@@ -99,26 +96,22 @@ class SearchRepository {
       return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
     }
 
-    // OR compuesto para v_app:
-    final ors = <String>[
-      "patient_name.ilike.%$q%",
-      "history_number.ilike.%$q%",
-      "patient_mrn.ilike.%$q%",
-      "mrn.ilike.%$q%",
-      "owner_name.ilike.%$q%",
-      "record_title.ilike.%$q%",
-      if (isNumeric) ...[
-        "history_number.eq.$q",
-        "patient_mrn.eq.$q",
-        "mrn.eq.$q",
-      ],
-    ];
+    // Usar la misma lógica simple que funciona en pacientes.dart
+    try {
+      final rows = await baseSel
+          .or('patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%')
+          .order('patient_name', ascending: true)
+          .limit(limit);
 
-    final rows = await baseSel
-        .or(ors.join(','))
-        .order('history_number', ascending: true, nullsFirst: true)
-        .limit(limit);
+      return _processSearchResults(rows);
+    } catch (e) {
+      // Si hay error, retornar lista vacía
+      return [];
+    }
+  }
 
+  /// Procesa los resultados de búsqueda evitando duplicados
+  List<PatientSearchRow> _processSearchResults(List<dynamic> rows) {
     // Agrupar por patient_id para evitar duplicados
     final Map<String, Map<String, dynamic>> uniquePatients = {};
     for (final record in rows) {

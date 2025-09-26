@@ -26,7 +26,6 @@ class _NewPatientFormState extends State<NewPatientForm> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _mrnController = TextEditingController();
-  final _breedController = TextEditingController();
   final _ageController = TextEditingController();
   final _ownerNameController = TextEditingController();
   final _ownerPhoneController = TextEditingController();
@@ -34,18 +33,76 @@ class _NewPatientFormState extends State<NewPatientForm> {
 
   String _selectedSpecies = 'Canino';
   String _selectedSex = 'Macho';
+  String _selectedBreed = '';
+  String _selectedTemperament = 'Suave';
+  List<Map<String, dynamic>> _availableBreeds = [];
+  bool _breedsLoaded = false;
   bool _isLoading = false;
+
+  // Opciones de temperamento
+  final List<String> _temperamentOptions = [
+    'Suave',
+    'Activo',
+    'Nervioso',
+    'Agresivo',
+    'Tranquilo',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBreeds();
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _mrnController.dispose();
-    _breedController.dispose();
     _ageController.dispose();
     _ownerNameController.dispose();
     _ownerPhoneController.dispose();
     _ownerEmailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadBreeds() async {
+    try {
+      // Determinar el código de especie para filtrar las razas
+      String speciesCode = '';
+      switch (_selectedSpecies.toLowerCase()) {
+        case 'canino':
+          speciesCode = 'dog';
+          break;
+        case 'felino':
+          speciesCode = 'cat';
+          break;
+        default:
+          speciesCode = 'dog'; // Default to dog if species not found
+      }
+
+      final breeds = await _supa
+          .from('breeds')
+          .select('id, name, species_code')
+          .eq('species_code', speciesCode)
+          .order('name');
+
+      if (mounted) {
+        setState(() {
+          _availableBreeds = List<Map<String, dynamic>>.from(breeds);
+          _breedsLoaded = true;
+          if (_selectedBreed.isNotEmpty &&
+              !_availableBreeds
+                  .any((breed) => breed['name'] == _selectedBreed)) {
+            _selectedBreed =
+                ''; // Clear selection if current breed is not available for new species
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        NotificationService.showError('Error al cargar razas: $e');
+      }
+    }
   }
 
   Future<void> _savePatient() async {
@@ -83,8 +140,9 @@ class _NewPatientFormState extends State<NewPatientForm> {
         'clinic_id': widget.clinicId,
         'name': _nameController.text.trim(),
         'species': _selectedSpecies,
-        'breed': _breedController.text.trim(),
+        'breed': _selectedBreed,
         'sex': _selectedSex,
+        'temper': _selectedTemperament,
         'birth_date': _ageController.text.trim().isNotEmpty
             ? DateTime.parse(_ageController.text.trim())
             : null,
@@ -250,12 +308,18 @@ class _NewPatientFormState extends State<NewPatientForm> {
                         labelText: 'Especie *',
                         border: OutlineInputBorder(),
                       ),
-                      items: ['Canino', 'Felino', 'Ave', 'Reptil', 'Otro']
+                      items: ['Canino', 'Felino']
                           .map(
                               (e) => DropdownMenuItem(value: e, child: Text(e)))
                           .toList(),
-                      onChanged: (value) =>
-                          setState(() => _selectedSpecies = value!),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedSpecies = value!;
+                          _selectedBreed =
+                              ''; // Reset breed when species changes
+                        });
+                        _loadBreeds(); // Reload breeds for the new species
+                      },
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -270,13 +334,37 @@ class _NewPatientFormState extends State<NewPatientForm> {
               Row(
                 children: [
                   Expanded(
-                    child: TextFormField(
-                      controller: _breedController,
-                      decoration: const InputDecoration(
-                        labelText: 'Raza',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
+                    child: _breedsLoaded
+                        ? DropdownButtonFormField<String>(
+                            value:
+                                _selectedBreed.isEmpty ? null : _selectedBreed,
+                            decoration: const InputDecoration(
+                              labelText: 'Raza',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: _availableBreeds
+                                .map((breed) => DropdownMenuItem<String>(
+                                      value: breed['name'] as String,
+                                      child: Text(breed['name'] as String),
+                                    ))
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _selectedBreed = value ?? ''),
+                            hint: const Text('Seleccione una raza'),
+                          )
+                        : const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Raza'),
+                              SizedBox(height: 8),
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ],
+                          ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -295,6 +383,25 @@ class _NewPatientFormState extends State<NewPatientForm> {
                     ),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // Agregar selección de temperamento
+              DropdownButtonFormField<String>(
+                value: _selectedTemperament,
+                decoration: const InputDecoration(
+                  labelText: 'Temperamento *',
+                  border: OutlineInputBorder(),
+                ),
+                items: _temperamentOptions
+                    .map((e) => DropdownMenuItem(
+                          value: e,
+                          child: Text(e),
+                        ))
+                    .toList(),
+                onChanged: (value) =>
+                    setState(() => _selectedTemperament = value!),
               ),
 
               const SizedBox(height: 16),

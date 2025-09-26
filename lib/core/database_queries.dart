@@ -58,7 +58,7 @@ class DatabaseQueries {
         "owner_name.ilike.%$q%",
         "mrn.eq.$q",
         if (isNumeric)
-          "mrn_int.eq.${int.parse(q.replaceAll(RegExp(r'\\D'), ''))}",
+          "mrn_int.eq.${int.parse(q.replaceAll(RegExp(r'\D'), ''))}",
       ];
 
       final rows = await queryBuilder

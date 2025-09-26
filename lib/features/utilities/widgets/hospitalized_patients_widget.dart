@@ -11,6 +11,7 @@ class HospitalizedPatientsWidget extends StatelessWidget {
   final Function(HospitalizedPatient) onShowDischargeDialog;
   final Function(HospitalizedPatient) onShowHistory;
   final Function(HospitalizedPatient) onShowTreatment;
+  final Function(HospitalizedPatient) onLoadPatientTreatments;
 
   const HospitalizedPatientsWidget({
     super.key,
@@ -20,6 +21,7 @@ class HospitalizedPatientsWidget extends StatelessWidget {
     required this.onShowDischargeDialog,
     required this.onShowHistory,
     required this.onShowTreatment,
+    required this.onLoadPatientTreatments,
   });
 
   @override
@@ -56,6 +58,34 @@ class HospitalizedPatientsWidget extends StatelessWidget {
 
                 final patients = snapshot.data ?? [];
 
+                // Si no hay pacientes hospitalizados, mostrar mensaje
+                if (patients.isEmpty) {
+                  return Container(
+                    height: 100,
+                    padding: EdgeInsets.all(16),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Iconsax.empty_wallet,
+                            size: 32,
+                            color: home.AppColors.neutral400,
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'No hay pacientes hospitalizados',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: home.AppColors.neutral500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
                 return ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: patients.length + 1,
@@ -70,7 +100,8 @@ class HospitalizedPatientsWidget extends StatelessWidget {
 
                     // Card de paciente
                     return Container(
-                      width: 260,
+                      width:
+                          250, // Aumentado para evitar overflow de los botones
                       margin: EdgeInsets.only(right: 12),
                       child: _buildPatientCard(patients[index]),
                     );
@@ -167,7 +198,7 @@ class HospitalizedPatientsWidget extends StatelessWidget {
 
   Widget _buildPatientCard(HospitalizedPatient patient) {
     return Container(
-      height: 170,
+      height: 135, // Altura reducida optimizada
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -186,138 +217,182 @@ class HospitalizedPatientsWidget extends StatelessWidget {
       child: InkWell(
         onTap: () {
           print('🔍 Card taped para paciente: ${patient.patientName}');
-          onShowPatientDetail(patient);
+          // Cargar equipo datos en Calendario/Gantt
+          onLoadPatientTreatments(patient);
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              // Sección principal del paciente
-              Expanded(
-                child: Row(
-                  children: [
-                    // Avatar del paciente (circular)
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                      ),
-                      child: ClipOval(
-                        child: DataService().buildBreedImageWidget(
-                          breedId: patient.breedId,
-                          species: patient.speciesLabel,
-                          width: 50,
-                          height: 50,
-                          borderRadius: 25,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical:
+                    12), // Padding ligeramente reducido para evitar overflow en botones
+            child: IntrinsicHeight(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment
+                    .center, // Centrar el contenido en el espacio disponible
+                children: [
+                  // Sección principal del paciente - Sin Expanded, contenido natural centrado
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment
+                        .start, // Alinear en la parte superior para que avatar y texto estén alineados
+                    children: [
+                      // Avatar del paciente (circular)
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                        ),
+                        child: ClipOval(
+                          child: DataService().buildBreedImageWidget(
+                            breedId: patient.breedId,
+                            species: patient.speciesLabel,
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                          ),
                         ),
                       ),
-                    ),
 
-                    const SizedBox(width: 10),
+                      const SizedBox(
+                          width:
+                              14), // Aumentado de 10 a 14 para más respiro entre avatar y texto
 
-                    // Información del paciente
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Nombre del paciente
-                          Text(
-                            patient.patientName,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: home.AppColors.neutral900,
+                      // Información del paciente
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment
+                              .start, // Cambiado de center a start para permitir control manual del spacing
+                          children: [
+                            // Nombre del paciente
+                            Text(
+                              patient.patientName,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: home.AppColors.neutral900,
+                              ),
+                              maxLines:
+                                  2, // Permite 2 líneas para nombres largos
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
 
-                          const SizedBox(height: 2),
+                            const SizedBox(
+                                height:
+                                    3), // Aumentado para más espaciado entre nombre y MRN
 
-                          // MRN
-                          Text(
-                            'MRN: ${patient.mrn}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: home.AppColors.neutral600,
+                            // MRN
+                            Text(
+                              'MRN: ${patient.mrn}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: home.AppColors.neutral600,
+                              ),
                             ),
-                          ),
 
-                          const SizedBox(height: 2),
+                            const SizedBox(
+                                height:
+                                    3), // Aumentado para más espaciado entre MRN y especie/raza
 
-                          // Especie y raza
-                          Text(
-                            '${patient.speciesLabel} / ${patient.breedLabel}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: home.AppColors.neutral500,
+                            // Especie y raza
+                            Text(
+                              '${patient.speciesLabel} / ${patient.breedLabel}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: home.AppColors.neutral500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
 
-                    const SizedBox(width: 8),
+                            const SizedBox(
+                                height: 3), // Espacio hacia temperamento
 
-                    // Status badge más pequeño
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: home.AppColors.success500.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        patient.hospitalizationStatus == 'active'
-                            ? 'Estable'
-                            : _getPriorityLabel(
-                                patient.hospitalizationPriority),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: home.AppColors.success500,
+                            // Temperamento con badge pegado directo al final del texto
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Temperamento del paciente
+                                Text(
+                                  patient.temperament ?? 'Suave',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: home.AppColors.neutral600,
+                                  ),
+                                ),
+                                const SizedBox(
+                                    width:
+                                        6), // Espacio mínimo entre texto y badge
+                                // Badge directamente pegado al temperamento
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: home.AppColors.success500
+                                        .withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    patient.hospitalizationStatus == 'active'
+                                        ? 'Estable'
+                                        : _getPriorityLabel(
+                                            patient.hospitalizationPriority),
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: home.AppColors.success500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                    ],
+                  ),
 
-              const SizedBox(height: 8),
+                  const SizedBox(
+                      height:
+                          8), // Aumentado de 4 a 8 para mejor espaciado entre info y botones
 
-              // Botones de acción: Historia, Tratamiento y Alta médica
-              SizedBox(
-                height: 30, // Reducir altura
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildPillButton(
-                        label: 'Historia',
-                        icon: Iconsax.document_text,
-                        onTap: () => onShowHistory(patient),
-                      ),
+                  // Botones de acción: Historia, Tratamiento y Alta médica - Aumentados ligeramente
+                  SizedBox(
+                    height: 28, // Aumentado de 24 a 28 para mejor usabilidad
+                    child: Row(
+                      children: [
+                        // Historia - botón más compacto
+                        Flexible(
+                          child: _buildPillButton(
+                            label: 'Historia',
+                            icon: Iconsax.document_text,
+                            onTap: () => onShowHistory(patient),
+                          ),
+                        ),
+                        const SizedBox(
+                            width:
+                                6), // Aumentado de 4 a 6 para mejor separación
+                        // Tratamiento - botón más compacto
+                        Flexible(
+                          child: _buildPillButton(
+                            label: 'Tratamiento',
+                            icon: Iconsax.health,
+                            onTap: () => onShowTreatment(patient),
+                          ),
+                        ),
+                        const SizedBox(
+                            width:
+                                6), // Aumentado de 3 a 6 para mejor separación
+                        // Botón de Alta médica con icono circular - fijo
+                        _buildDischargeButton(patient),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: _buildPillButton(
-                        label: 'Tratamiento',
-                        icon: Iconsax.health,
-                        onTap: () => onShowTreatment(patient),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    // Botón de Alta médica con icono circular - fijo
-                    _buildDischargeButton(patient),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            )), // Cierre del IntrinsicHeight
       ),
     );
   }
@@ -330,7 +405,7 @@ class HospitalizedPatientsWidget extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: home.AppColors.neutral100,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16), // Más redondeado y compacto
         border: Border.all(
           color: home.AppColors.neutral200,
           width: 1,
@@ -338,23 +413,25 @@ class HospitalizedPatientsWidget extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          padding: EdgeInsets.symmetric(
+              horizontal: 6,
+              vertical: 6), // Aumentado ligeramente para mejor usabilidad
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                size: 11,
+                size: 11, // Ligeramente aumentado para mejor proporción
                 color: home.AppColors.neutral600,
               ),
-              const SizedBox(width: 3),
+              const SizedBox(width: 2),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 10, // Aumentado ligeramente de 9 a 10
                   color: home.AppColors.neutral700,
                   fontWeight: FontWeight.w500,
                 ),

@@ -44,9 +44,9 @@ class HospitalizationTopBar extends StatelessWidget {
               size: 20,
             ),
           ),
-          
+
           const SizedBox(width: 16),
-          
+
           // Título
           Text(
             'Hospitalización',
@@ -56,9 +56,9 @@ class HospitalizationTopBar extends StatelessWidget {
               color: home.AppColors.neutral900,
             ),
           ),
-          
+
           const Spacer(),
-          
+
           // Botones de vista
           Row(
             children: [
@@ -71,7 +71,8 @@ class HospitalizationTopBar extends StatelessWidget {
               const SizedBox(width: 8),
               _buildViewButton(
                 icon: Iconsax.task_square,
-                label: 'Gantt',
+                label:
+                    'Tratamientos', // Cambiado de 'Gantt' a 'Tratamientos' para que sea más claro
                 view: HospitalizationView.gantt,
                 isSelected: currentView == HospitalizationView.gantt,
               ),

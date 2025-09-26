@@ -402,7 +402,6 @@ class DataRepository {
   Future<List<PatientSearchRow>> searchPatients(String query,
       {int limit = 30}) async {
     final q = query.trim();
-    final isNumeric = int.tryParse(q.replaceAll(RegExp(r'\D'), '')) != null;
 
     final baseSel = _db.from('v_app').select('*');
 
@@ -425,18 +424,10 @@ class DataRepository {
           .toList();
     }
 
-    // Búsqueda con OR compuesto para v_app
-    final ors = <String>[
-      "patient_name.ilike.%$q%",
-      "patient_mrn.ilike.%$q%",
-      "owner_name.ilike.%$q%",
-      "record_title.ilike.%$q%",
-      if (isNumeric) "patient_mrn.eq.$q",
-    ];
-
+    // Usar la misma lógica simple que funciona en pacientes.dart
     final rows = await baseSel
-        .or(ors.join(','))
-        .order('patient_mrn', ascending: true, nullsFirst: true)
+        .or('patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%')
+        .order('patient_name', ascending: true)
         .limit(limit);
 
     // Agrupar por patient_id para evitar duplicados
