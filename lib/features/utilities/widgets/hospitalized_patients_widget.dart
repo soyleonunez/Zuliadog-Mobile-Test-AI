@@ -1,0 +1,503 @@
+import 'package:flutter/material.dart';
+import 'package:iconsax/iconsax.dart';
+import '../../home.dart' as home;
+import '../../../features/data/data_service.dart';
+import '../hospitalizacion.dart';
+
+class HospitalizedPatientsWidget extends StatelessWidget {
+  final Stream<List<HospitalizedPatient>> patientsStream;
+  final Function() onShowPatientSelection;
+  final Function(HospitalizedPatient) onShowPatientDetail;
+  final Function(HospitalizedPatient) onShowDischargeDialog;
+  final Function(HospitalizedPatient) onShowHistory;
+  final Function(HospitalizedPatient) onShowTreatment;
+
+  const HospitalizedPatientsWidget({
+    super.key,
+    required this.patientsStream,
+    required this.onShowPatientSelection,
+    required this.onShowPatientDetail,
+    required this.onShowDischargeDialog,
+    required this.onShowHistory,
+    required this.onShowTreatment,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 200,
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Título
+          Text(
+            'Pacientes Hospitalizados',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: home.AppColors.neutral900,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Stream de pacientes - Scroll horizontal
+          Expanded(
+            child: StreamBuilder<List<HospitalizedPatient>>(
+              stream: patientsStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return _buildLoadingState();
+                }
+
+                if (snapshot.hasError) {
+                  return _buildErrorState();
+                }
+
+                final patients = snapshot.data ?? [];
+
+                return ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: patients.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == patients.length) {
+                      return Container(
+                        width: 120,
+                        margin: EdgeInsets.only(right: 8),
+                        child: _buildAddPatientCard(),
+                      );
+                    }
+
+                    // Card de paciente
+                    return Container(
+                      width: 260,
+                      margin: EdgeInsets.only(right: 12),
+                      child: _buildPatientCard(patients[index]),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return ListView(
+      scrollDirection: Axis.horizontal,
+      children: [
+        _buildAddPatientCard(),
+      ],
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Iconsax.warning_2,
+            size: 48,
+            color: home.AppColors.danger500,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Error al cargar pacientes',
+            style: TextStyle(
+              fontSize: 14,
+              color: home.AppColors.neutral600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddPatientCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: home.AppColors.primary200,
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onShowPatientSelection,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Iconsax.add_circle,
+                  size: 24,
+                  color: home.AppColors.primary500,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Agregar',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: home.AppColors.neutral900,
+                  ),
+                ),
+                Text(
+                  'Paciente',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: home.AppColors.neutral600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPatientCard(HospitalizedPatient patient) {
+    return Container(
+      height: 170,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: home.AppColors.neutral200,
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: home.AppColors.neutral200.withOpacity(0.3),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          print('🔍 Card taped para paciente: ${patient.patientName}');
+          onShowPatientDetail(patient);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              // Sección principal del paciente
+              Expanded(
+                child: Row(
+                  children: [
+                    // Avatar del paciente (circular)
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                      ),
+                      child: ClipOval(
+                        child: DataService().buildBreedImageWidget(
+                          breedId: patient.breedId,
+                          species: patient.speciesLabel,
+                          width: 50,
+                          height: 50,
+                          borderRadius: 25,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 10),
+
+                    // Información del paciente
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Nombre del paciente
+                          Text(
+                            patient.patientName,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: home.AppColors.neutral900,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+
+                          const SizedBox(height: 2),
+
+                          // MRN
+                          Text(
+                            'MRN: ${patient.mrn}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: home.AppColors.neutral600,
+                            ),
+                          ),
+
+                          const SizedBox(height: 2),
+
+                          // Especie y raza
+                          Text(
+                            '${patient.speciesLabel} / ${patient.breedLabel}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: home.AppColors.neutral500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // Status badge más pequeño
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: home.AppColors.success500.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        patient.hospitalizationStatus == 'active'
+                            ? 'Estable'
+                            : _getPriorityLabel(
+                                patient.hospitalizationPriority),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: home.AppColors.success500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Botones de acción: Historia, Tratamiento y Alta médica
+              SizedBox(
+                height: 30, // Reducir altura
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildPillButton(
+                        label: 'Historia',
+                        icon: Iconsax.document_text,
+                        onTap: () => onShowHistory(patient),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: _buildPillButton(
+                        label: 'Tratamiento',
+                        icon: Iconsax.health,
+                        onTap: () => onShowTreatment(patient),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    // Botón de Alta médica con icono circular - fijo
+                    _buildDischargeButton(patient),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPillButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: home.AppColors.neutral100,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: home.AppColors.neutral200,
+          width: 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 11,
+                color: home.AppColors.neutral600,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: home.AppColors.neutral700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDischargeButton(HospitalizedPatient patient) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: home.AppColors.neutral100,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: home.AppColors.neutral200,
+          width: 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: () => onShowDischargeDialog(patient),
+        borderRadius: BorderRadius.circular(16),
+        child: Icon(
+          Iconsax.logout,
+          size: 14,
+          color: home.AppColors.success500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+    bool expanded = false,
+  }) {
+    final chipWidget = Container(
+      padding: expanded
+          ? EdgeInsets.symmetric(horizontal: 6, vertical: 4)
+          : EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(expanded ? 6 : 3),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: expanded ? 10 : 6, color: color),
+          SizedBox(width: expanded ? 4 : 1),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: expanded ? 9 : 6,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return expanded ? Expanded(child: chipWidget) : chipWidget;
+  }
+
+  Color _getPriorityColor(String? priority) {
+    switch (priority) {
+      case 'low':
+        return home.AppColors.success500;
+      case 'normal':
+        return home.AppColors.primary500;
+      case 'high':
+        return home.AppColors.warning500;
+      case 'critical':
+        return home.AppColors.danger500;
+      default:
+        return home.AppColors.neutral500;
+    }
+  }
+
+  String _getPriorityLabel(String? priority) {
+    switch (priority) {
+      case 'low':
+        return 'Baja';
+      case 'normal':
+        return 'Normal';
+      case 'high':
+        return 'Alta';
+      case 'critical':
+        return 'Crítica';
+      default:
+        return 'Normal';
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date).inDays;
+
+    if (difference == 0) {
+      return 'Hoy';
+    } else if (difference == 1) {
+      return 'Ayer';
+    } else if (difference < 7) {
+      return '${difference}d';
+    } else {
+      return '${date.day}/${date.month}';
+    }
+  }
+
+  String _calculateAge(String? birthDate) {
+    if (birthDate == null || birthDate.isEmpty) {
+      return 'No especificada';
+    }
+
+    try {
+      final birth = DateTime.parse(birthDate);
+      final now = DateTime.now();
+      int age = now.year - birth.year;
+
+      // Ajustar si aún no ha cumplido años este año
+      if (now.month < birth.month ||
+          (now.month == birth.month && now.day < birth.day)) {
+        age--;
+      }
+
+      if (age < 0) {
+        return 'Fecha inválida';
+      } else if (age == 0) {
+        // Calcular meses si es menor de 1 año
+        int months = now.month - birth.month;
+        if (now.day < birth.day) months--;
+        if (months <= 0) months = 1;
+        return '$months ${months == 1 ? 'mes' : 'meses'}';
+      } else {
+        return '$age ${age == 1 ? 'año' : 'años'}';
+      }
+    } catch (e) {
+      return 'Fecha inválida';
+    }
+  }
+}

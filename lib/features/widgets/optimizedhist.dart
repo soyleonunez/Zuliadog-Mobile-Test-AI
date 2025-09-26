@@ -46,6 +46,15 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     _loadClinicId();
   }
 
+  @override
+  void didUpdateWidget(OptimizedHistoriasPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.mrn != oldWidget.mrn) {
+      _currentMrn = widget.mrn;
+      _loadData(); // Reload data when mrn changes
+    }
+  }
+
   Future<void> _loadClinicId() async {
     try {
       // Para ambiente controlado: usar clinic_id hardcodeado

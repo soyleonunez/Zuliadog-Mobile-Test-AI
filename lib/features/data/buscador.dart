@@ -36,12 +36,19 @@ class PatientSearchRow {
 
   factory PatientSearchRow.fromJson(Map<String, dynamic> j) {
     return PatientSearchRow(
-      patientId: j['patient_id']?.toString() ?? j['patient_uuid']?.toString() ?? '',
+      patientId:
+          j['patient_id']?.toString() ?? j['patient_uuid']?.toString() ?? '',
       clinicId: j['clinic_id']?.toString() ?? '',
-      patientName: j['patient_name']?.toString() ?? j['paciente_name_snapshot']?.toString() ?? '',
-      historyNumber: j['patient_mrn']?.toString() ?? j['history_number_snapshot']?.toString(),
+      patientName: j['patient_name']?.toString() ??
+          j['paciente_name_snapshot']?.toString() ??
+          '',
+      historyNumber: j['history_number']?.toString() ??
+          j['patient_mrn']?.toString() ??
+          j['mrn']?.toString() ??
+          j['history_number_snapshot']?.toString(),
       mrnInt: j['mrn_int'] is num ? (j['mrn_int'] as num).toInt() : null,
-      ownerName: j['owner_name']?.toString() ?? j['owner_name_snapshot']?.toString(),
+      ownerName:
+          j['owner_name']?.toString() ?? j['owner_name_snapshot']?.toString(),
       ownerPhone: j['owner_phone']?.toString(),
       ownerEmail: j['owner_email']?.toString(),
       species: _getSpeciesLabel(j['patient_species_code']),
@@ -87,25 +94,29 @@ class SearchRepository {
 
     if (q.isEmpty) {
       // Lista inicial (suave): algunos pacientes ordenados por nombre
-      final rows = await baseSel
-          .order('patient_name', ascending: true)
-          .limit(limit);
+      final rows =
+          await baseSel.order('patient_name', ascending: true).limit(limit);
       return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
     }
 
     // OR compuesto para v_app:
     final ors = <String>[
       "patient_name.ilike.%$q%",
+      "history_number.ilike.%$q%",
       "patient_mrn.ilike.%$q%",
+      "mrn.ilike.%$q%",
       "owner_name.ilike.%$q%",
       "record_title.ilike.%$q%",
-      if (isNumeric)
+      if (isNumeric) ...[
+        "history_number.eq.$q",
         "patient_mrn.eq.$q",
+        "mrn.eq.$q",
+      ],
     ];
 
     final rows = await baseSel
         .or(ors.join(','))
-        .order('patient_mrn', ascending: true, nullsFirst: true)
+        .order('history_number', ascending: true, nullsFirst: true)
         .limit(limit);
 
     // Agrupar por patient_id para evitar duplicados

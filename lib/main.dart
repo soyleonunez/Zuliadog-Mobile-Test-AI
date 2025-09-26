@@ -112,7 +112,7 @@ class ZuliadogApp extends StatelessWidget {
               );
             }
 
-            return child!;
+            return child ?? const SizedBox();
           },
         );
       },

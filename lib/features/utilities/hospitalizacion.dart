@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
+import 'widgets/hospitalization_topbar.dart';
+import 'widgets/hospitalized_patients_widget.dart';
+import 'widgets/calendar_gantt_widget.dart';
+import 'widgets/treatments_widget.dart';
+import 'widgets/detail_panel_widget.dart';
 import '../menu.dart';
 import '../home.dart' as home;
 import '../../core/navigation.dart';
@@ -14,8 +18,6 @@ import 'tickets.dart';
 import 'reportes.dart';
 
 final _supa = Supabase.instance.client;
-
-enum _Vista { gantt, calendario }
 
 class HospitalizacionPage extends StatelessWidget {
   const HospitalizacionPage({super.key});
@@ -49,16 +51,7 @@ class HospitalizacionPage extends StatelessWidget {
                   userRole: UserRole.doctor,
                 ),
                 Expanded(
-                  child: Column(
-                    children: [
-                      _buildTopBar('Hospitalización'),
-                      const Divider(
-                          height: 1, color: home.AppColors.neutral200),
-                      Expanded(
-                        child: const HospitalizacionPanel(),
-                      ),
-                    ],
-                  ),
+                  child: HospitalizacionPanel(),
                 ),
               ],
             ),
@@ -68,34 +61,8 @@ class HospitalizacionPage extends StatelessWidget {
     );
   }
 
-  Widget _buildTopBar(String title) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-            bottom: BorderSide(color: home.AppColors.neutral200, width: 1)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: home.AppColors.neutral900,
-            ),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-
   void _handleNavigation(BuildContext context, String route) {
-    if (route == 'frame_home') {
-      NavigationHelper.navigateToRoute(context, '/home');
-    } else if (route == 'frame_hospitalizacion') {
+    if (route == 'frame_hospitalizacion') {
       // Ya estamos en hospitalización
     } else {
       // Navegar a la página correspondiente
@@ -134,9 +101,150 @@ class HospitalizacionPage extends StatelessWidget {
   }
 }
 
+// Modelos de datos actualizados para nuevas tablas
+class HospitalizedPatient {
+  final String id;
+  final String patientName;
+  final String mrn;
+  final int? mrnInt;
+  final String sex;
+  final DateTime? birthDate;
+  final String? speciesId;
+  final String speciesLabel;
+  final String? breedId;
+  final String breedLabel;
+  final String? breedImageUrl;
+  final String? temperament;
+  final String? ownerId;
+  final String? ownerName;
+  final String? ownerPhone;
+  final String? ownerEmail;
+  final String? ownerAddress;
+  final String? hospitalizationId;
+  final DateTime? admissionDate;
+  final DateTime? dischargeDate;
+  final String? hospitalizationStatus;
+  final String? hospitalizationPriority;
+  final String? roomNumber;
+  final String? bedNumber;
+  final String? diagnosis;
+  final String? treatmentPlan;
+  final String? specialInstructions;
+  final String? assignedVet;
+  final DateTime? hospitalizationCreatedAt;
+  final String? assignedVetEmail;
+  final String? assignedVetName;
+  final int pendingTasks;
+  final int completedTasks;
+  final int overdueTasks;
+  final int importantNotes;
+  final int todayNotes;
+  final int todayCompletions;
+  final DateTime? lastActivity;
+
+  HospitalizedPatient({
+    required this.id,
+    required this.patientName,
+    required this.mrn,
+    this.mrnInt,
+    required this.sex,
+    this.birthDate,
+    this.speciesId,
+    required this.speciesLabel,
+    this.breedId,
+    required this.breedLabel,
+    this.breedImageUrl,
+    this.temperament,
+    this.ownerId,
+    this.ownerName,
+    this.ownerPhone,
+    this.ownerEmail,
+    this.ownerAddress,
+    this.hospitalizationId,
+    this.admissionDate,
+    this.dischargeDate,
+    this.hospitalizationStatus,
+    this.hospitalizationPriority,
+    this.roomNumber,
+    this.bedNumber,
+    this.diagnosis,
+    this.treatmentPlan,
+    this.specialInstructions,
+    this.assignedVet,
+    this.hospitalizationCreatedAt,
+    this.assignedVetEmail,
+    this.assignedVetName,
+    required this.pendingTasks,
+    required this.completedTasks,
+    required this.overdueTasks,
+    required this.importantNotes,
+    required this.todayNotes,
+    required this.todayCompletions,
+    this.lastActivity,
+  });
+
+  factory HospitalizedPatient.fromJson(Map<String, dynamic> data) {
+    return HospitalizedPatient(
+      id: data['patient_id'] ?? '',
+      patientName: data['patient_name'] ?? '',
+      mrn: data['history_number'] ??
+          data['mrn'] ??
+          data['patient_mrn'] ??
+          data['history_number_snapshot'] ??
+          data['mrn_int']?.toString() ??
+          '',
+      mrnInt: data['mrn_int'],
+      sex: data['sex'] ?? '',
+      birthDate: data['birth_date'] != null
+          ? DateTime.tryParse(data['birth_date'])
+          : null,
+      speciesId: data['species_code'],
+      speciesLabel: data['species_label'] ?? 'Sin especificar',
+      breedId: data['breed_id'],
+      breedLabel: data['breed_label'] ?? 'Sin especificar',
+      breedImageUrl: data['breed_image_url'],
+      temperament: data['temperament'],
+      ownerId: data['owner_id'],
+      ownerName: data['owner_name'],
+      ownerPhone: data['owner_phone'],
+      ownerEmail: data['owner_email'],
+      ownerAddress: data['owner_address'],
+      hospitalizationId: data['hospitalization_id'],
+      admissionDate: data['admission_date'] != null
+          ? DateTime.tryParse(data['admission_date'])
+          : null,
+      dischargeDate: data['discharge_date'] != null
+          ? DateTime.tryParse(data['discharge_date'])
+          : null,
+      hospitalizationStatus: data['hospitalization_status'],
+      hospitalizationPriority: data['hospitalization_priority'],
+      roomNumber: data['room_number'],
+      bedNumber: data['bed_number'],
+      diagnosis: data['diagnosis'],
+      treatmentPlan: data['treatment_plan'],
+      specialInstructions: data['special_instructions'],
+      assignedVet: data['assigned_vet'],
+      hospitalizationCreatedAt: data['hospitalization_created_at'] != null
+          ? DateTime.tryParse(data['hospitalization_created_at'])
+          : null,
+      assignedVetEmail: data['assigned_vet_email'],
+      assignedVetName: data['assigned_vet_name'],
+      pendingTasks: data['pending_tasks'] ?? 0,
+      completedTasks: data['completed_tasks'] ?? 0,
+      overdueTasks: data['overdue_tasks'] ?? 0,
+      importantNotes: data['important_notes'] ?? 0,
+      todayNotes: data['today_notes'] ?? 0,
+      todayCompletions: data['today_completions'] ?? 0,
+      lastActivity: data['last_activity'] != null
+          ? DateTime.tryParse(data['last_activity'])
+          : null,
+    );
+  }
+}
+
 /// ===============================
-/// HOSPITALIZACIÓN – PANEL HÍBRIDO
-/// Cards por paciente + Gantt/Calendario + Lateral de actualizaciones
+/// HOSPITALIZACIÓN – PANEL OPTIMIZADO
+/// Diseño basado en la imagen de referencia con widgets fusionados
 /// ===============================
 
 class HospitalizacionPanel extends StatefulWidget {
@@ -148,25 +256,556 @@ class HospitalizacionPanel extends StatefulWidget {
 
 class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
   // --- Estado UI ---
-  bool showUpdates = true;
-  _Vista vista = _Vista.gantt;
-  String? selectedPatientMrn;
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-
-  // --- Datos de Supabase ---
-  String? _clinicId;
+  HospitalizationView _currentView = HospitalizationView.patients;
+  String? _selectedPatientId;
+  String _selectedTreatmentId = '';
+  DateTime _currentWeek = DateTime.now();
 
   // Streams para datos en tiempo real
-  late Stream<List<PacienteResumen>> _patientsStream;
-  late Stream<List<TareaHosp>> _tasksStream;
-  late Stream<List<UpdateItem>> _updatesStream;
+  late Stream<List<HospitalizedPatient>> _patientsStream;
+
+  // Funciones auxiliares para obtener campos con fallback
+  String? _getPatientMrn(Map<String, dynamic> patient) {
+    return patient['history_number'] ??
+        patient['mrn'] ??
+        patient['patient_mrn'] ??
+        patient['mrn_int']?.toString() ??
+        patient['patient_id'];
+  }
+
+  String? _getPatientId(Map<String, dynamic> patient) {
+    return patient['patient_id'] ?? patient['id'] ?? patient['patient_uuid'];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeStreams();
+  }
+
+  void _initializeStreams() {
+    // Stream para pacientes hospitalizados usando v_hosp (vista pública)
+    _patientsStream = _supa
+        .from('v_hosp')
+        .stream(primaryKey: ['patient_id']).map((data) => data
+            .where((item) => item['hospitalization_status'] == 'active')
+            .map((item) => HospitalizedPatient.fromJson(item))
+            .toList());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // TopBar con selector de vista
+        HospitalizationTopBar(
+          currentView: _currentView,
+          onViewChanged: (view) => setState(() => _currentView = view),
+        ),
+
+        // Contenido principal según la vista
+        Expanded(
+          child: _buildMainContent(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMainContent() {
+    switch (_currentView) {
+      case HospitalizationView.patients:
+        return _buildPatientsView();
+      case HospitalizationView.gantt:
+        return _buildGanttView();
+      case HospitalizationView.calendar:
+        return _buildCalendarView();
+      case HospitalizationView.reports:
+        return _buildReportsView();
+    }
+  }
+
+  Widget _buildPatientsView() {
+    return Row(
+      children: [
+        // Panel izquierdo: Pacientes + Calendario
+        Expanded(
+          flex: 3,
+          child: Column(
+            children: [
+              // Cards de pacientes
+              HospitalizedPatientsWidget(
+                patientsStream: _patientsStream,
+                onShowPatientSelection: _showPatientSelectionDialog,
+                onShowPatientDetail: _showPatientDetail,
+                onShowDischargeDialog: _showDischargeDialog,
+                onShowHistory: _showHistory,
+                onShowTreatment: _showTreatment,
+              ),
+
+              // Calendario semanal
+              Expanded(
+                child: CalendarGanttWidget(
+                  currentWeek: _currentWeek,
+                  selectedTreatmentId: _selectedTreatmentId,
+                  onTreatmentTap: (treatmentId) {
+                    setState(() {
+                      _selectedTreatmentId = treatmentId;
+                      _selectedPatientId = null;
+                    });
+                  },
+                  onTreatmentEdit: _editTreatment,
+                  onTreatmentComplete: _completeTreatment,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Panel derecho: Detalles
+        DetailPanelWidget(
+          selectedTreatmentId: _selectedTreatmentId,
+          selectedPatientId: _selectedPatientId,
+          onClose: () => setState(() {
+            _selectedTreatmentId = '';
+            _selectedPatientId = null;
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGanttView() {
+    return Row(
+      children: [
+        // Panel izquierdo: Tratamientos
+        Expanded(
+          flex: 2,
+          child: TreatmentsWidget(
+            selectedPatientId: _selectedPatientId,
+            onTreatmentTap: (treatmentId) {
+              setState(() {
+                _selectedTreatmentId = treatmentId;
+              });
+            },
+            onTreatmentEdit: _editTreatment,
+            onTreatmentComplete: _completeTreatment,
+          ),
+        ),
+
+        // Panel derecho: Detalles
+        DetailPanelWidget(
+          selectedTreatmentId: _selectedTreatmentId,
+          selectedPatientId: _selectedPatientId,
+          onClose: () => setState(() {
+            _selectedTreatmentId = '';
+            _selectedPatientId = null;
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalendarView() {
+    return Row(
+      children: [
+        // Panel izquierdo: Calendario
+        Expanded(
+          flex: 3,
+          child: CalendarGanttWidget(
+            currentWeek: _currentWeek,
+            selectedTreatmentId: _selectedTreatmentId,
+            onTreatmentTap: (treatmentId) {
+              setState(() {
+                _selectedTreatmentId = treatmentId;
+                _selectedPatientId = null;
+              });
+            },
+            onTreatmentEdit: _editTreatment,
+            onTreatmentComplete: _completeTreatment,
+          ),
+        ),
+
+        // Panel derecho: Detalles
+        DetailPanelWidget(
+          selectedTreatmentId: _selectedTreatmentId,
+          selectedPatientId: _selectedPatientId,
+          onClose: () => setState(() {
+            _selectedTreatmentId = '';
+            _selectedPatientId = null;
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReportsView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Iconsax.chart_2,
+            size: 64,
+            color: home.AppColors.neutral400,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Reportes',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: home.AppColors.neutral900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Funcionalidad en desarrollo',
+            style: TextStyle(
+              fontSize: 16,
+              color: home.AppColors.neutral600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPatientSelectionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => PatientSelectionDialog(
+        onPatientSelected: (patient) => _addPatientToHospitalization(patient),
+      ),
+    );
+  }
+
+  void _showPatientDetail(HospitalizedPatient patient) {
+    setState(() {
+      _selectedPatientId = patient.id;
+      _selectedTreatmentId = '';
+    });
+  }
+
+  void _showDischargeDialog(HospitalizedPatient patient) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Iconsax.logout,
+              color: home.AppColors.success500,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text('Dar de Alta'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '¿Estás seguro de que deseas dar de alta a este paciente?',
+              style: TextStyle(
+                fontSize: 16,
+                color: home.AppColors.neutral700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: home.AppColors.neutral50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: home.AppColors.neutral200,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    patient.patientName,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: home.AppColors.neutral900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'MRN: ${patient.mrn}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: home.AppColors.neutral600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(
+                color: home.AppColors.neutral600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _dischargePatient(patient);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: home.AppColors.success500,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Confirmar Alta'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Función para navegar a la Historia Médica
+  void _showHistory(HospitalizedPatient patient) {
+    Navigator.pushNamed(
+      context,
+      '/historias',
+      arguments: {'mrn': patient.mrn, 'patient_id': patient.id},
+    );
+  }
+
+  // Función para mostrar tratamientos del paciente
+  void _showTreatment(HospitalizedPatient patient) {
+    setState(() {
+      _selectedPatientId = patient.id;
+      _currentView = HospitalizationView.gantt;
+    });
+  }
+
+  void _editTreatment(String treatmentId) {
+    // Implementar edición de tratamiento
+    print('Editando tratamiento: $treatmentId');
+  }
+
+  void _completeTreatment(String treatmentId) {
+    // Implementar completar tratamiento
+    print('Completando tratamiento: $treatmentId');
+  }
+
+  Future<void> _addPatientToHospitalization(
+      Map<String, dynamic> patient) async {
+    final patientId = _getPatientId(patient);
+    final patientMrn = _getPatientMrn(patient);
+
+    print('🏥 Iniciando hospitalización para: ${patient['patient_name']}');
+    print('🏥 ID del paciente: $patientId');
+    print('🏥 MRN del paciente: $patientMrn');
+
+    if (patientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: No se pudo obtener el ID del paciente'),
+          backgroundColor: home.AppColors.danger500,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Verificar si el paciente ya está hospitalizado
+      print('🔍 Verificando si el paciente ya está hospitalizado...');
+      final hospitalizationResponse = await _supa
+          .from('hospitalization')
+          .select('*')
+          .eq('patient_id', patientId)
+          .eq('status', 'active')
+          .maybeSingle();
+
+      print('🔍 Respuesta de verificación: $hospitalizationResponse');
+
+      if (hospitalizationResponse != null) {
+        print('⚠️ El paciente ya está hospitalizado');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('El paciente ya está hospitalizado'),
+            backgroundColor: home.AppColors.warning500,
+          ),
+        );
+      } else {
+        print(
+            '✅ Paciente no hospitalizado, procediendo con la hospitalización...');
+
+        print('📝 Insertando en tabla hospitalization...');
+        // Agregar el paciente a hospitalización
+        try {
+          final hospitalizationResult = await _supa
+              .from('hospitalization')
+              .insert({
+                'clinic_id': '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203',
+                'patient_id': patientId,
+                'admission_date': DateTime.now().toIso8601String(),
+                'status': 'active',
+                'priority': 'normal',
+                'created_by': _supa.auth.currentUser?.id,
+              })
+              .select('id')
+              .single();
+
+          print('📝 Hospitalization insertado: $hospitalizationResult');
+          final hospitalizationId = hospitalizationResult['id'];
+          print('📝 ID de hospitalización obtenido: $hospitalizationId');
+
+          // Crear nota de ingreso automática (sin column title)
+          print('📝 Insertando nota de ingreso...');
+          await _supa.from('notes').insert({
+            'patient_id': patientId,
+            'hospitalization_id': hospitalizationId,
+            'content':
+                'Ingreso a Hospitalización - Paciente ingresado el ${DateTime.now().toString().split(' ')[0]}',
+            'note_type': 'admission',
+            'created_by': _supa.auth.currentUser?.id,
+          });
+          print('📝 Nota de ingreso insertada');
+
+          // Crear tarea inicial de evaluación
+          print('📝 Insertando tarea de evaluación...');
+          await _supa.from('tasks').insert({
+            'patient_id': patientId,
+            'hospitalization_id': hospitalizationId,
+            'title': 'Evaluación Inicial',
+            'description':
+                'Realizar evaluación inicial del paciente hospitalizado',
+            'task_type': 'evaluation',
+            'priority': 'high',
+            'due_date':
+                DateTime.now().add(Duration(hours: 2)).toIso8601String(),
+            'assigned_to': _supa.auth.currentUser?.id,
+            'created_by': _supa.auth.currentUser?.id,
+          });
+          print('📝 Tarea de evaluación insertada');
+
+          print(
+              '✅ Hospitalización completada para: ${patient['patient_name']}');
+          print('✅ ID de hospitalización: $hospitalizationId');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Paciente agregado a hospitalización'),
+              backgroundColor: home.AppColors.success500,
+            ),
+          );
+        } catch (e) {
+          print('❌ Error en hospitalización: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error en hospitalización: $e'),
+              backgroundColor: home.AppColors.danger500,
+            ),
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al agregar paciente: ${e.toString()}'),
+          backgroundColor: home.AppColors.danger500,
+        ),
+      );
+    }
+  }
+
+  Future<void> _dischargePatient(HospitalizedPatient patient) async {
+    try {
+      // Obtener el ID de hospitalización
+      final hospitalizationResponse = await _supa
+          .from('hospitalization')
+          .select('id')
+          .eq('patient_id', patient.id)
+          .eq('status', 'active')
+          .single();
+
+      final hospitalizationId = hospitalizationResponse['id'];
+
+      // Actualizar el estado de hospitalización a 'discharged'
+      await _supa.from('hospitalization').update({
+        'status': 'discharged',
+        'discharge_date': DateTime.now().toIso8601String(),
+        'updated_by': _supa.auth.currentUser?.id,
+      }).eq('id', hospitalizationId);
+
+      // Crear una nota de alta automática (sin title column)
+      await _supa.from('notes').insert({
+        'patient_id': patient.id,
+        'hospitalization_id': hospitalizationId,
+        'content':
+            'Alta Médica - Paciente dado de alta el ${DateTime.now().toString().split(' ')[0]}',
+        'note_type': 'discharge',
+        'priority': 'normal',
+        'created_by': _supa.auth.currentUser?.id,
+      });
+
+      // Crear una tarea de seguimiento post-alta
+      await _supa.from('tasks').insert({
+        'patient_id': patient.id,
+        'hospitalization_id': hospitalizationId,
+        'title': 'Seguimiento Post-Alta',
+        'description': 'Contactar al dueño para seguimiento del paciente',
+        'task_type': 'follow_up',
+        'priority': 'normal',
+        'due_date': DateTime.now().add(Duration(days: 3)).toIso8601String(),
+        'assigned_to': _supa.auth.currentUser?.id,
+        'created_by': _supa.auth.currentUser?.id,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Paciente dado de alta exitosamente'),
+          backgroundColor: home.AppColors.success500,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al dar de alta: ${e.toString()}'),
+          backgroundColor: home.AppColors.danger500,
+        ),
+      );
+    }
+  }
+}
+
+/// Diálogo para seleccionar pacientes no hospitalizados
+class PatientSelectionDialog extends StatefulWidget {
+  final Function(Map<String, dynamic>) onPatientSelected;
+
+  const PatientSelectionDialog({
+    super.key,
+    required this.onPatientSelected,
+  });
+
+  @override
+  State<PatientSelectionDialog> createState() => _PatientSelectionDialogState();
+}
+
+class _PatientSelectionDialogState extends State<PatientSelectionDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  List<Map<String, dynamic>> _patients = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
-    _loadClinicId();
+    _loadPatients();
   }
 
   @override
@@ -182,1091 +821,235 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
     });
   }
 
-  bool _isHospitalizedPatient(Map<String, dynamic> patient) {
-    // Un paciente está hospitalizado si:
-    // 1. Tiene un status explícito de hospitalizado
-    // 2. Tiene registros médicos recientes (últimos 7 días)
-    // 3. Tiene documentos adjuntos recientes
-    final status = patient['status']?.toString().toLowerCase();
-    if (status == 'hospitalized' || status == 'estable') {
-      return true;
-    }
+  Future<void> _loadPatients() async {
+    setState(() {
+      _isLoading = true;
+    });
 
-    // Verificar si tiene registros médicos recientes
-    final recordDate = patient['record_date'];
-    if (recordDate != null) {
-      try {
-        final recordDateTime = DateTime.parse(recordDate);
-        final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
-        if (recordDateTime.isAfter(sevenDaysAgo)) {
-          return true;
-        }
-      } catch (e) {
-        // Si no se puede parsear la fecha, asumir que no está hospitalizado
-      }
-    }
-
-    return false;
-  }
-
-  Future<void> _loadClinicId() async {
     try {
-      // Obtener el clinic_id del usuario autenticado
-      final user = _supa.auth.currentUser;
-      if (user != null) {
-        // Buscar el clinic_id en la tabla clinic_roles
-        final response = await _supa
-            .from('clinic_roles')
-            .select('clinic_id')
-            .eq('user_id', user.id)
-            .eq('is_active', true)
-            .single();
+      // Usar la misma lógica de búsqueda que funciona en buscador.dart
+      final response = await _supa.from('v_app').select('*');
 
-        _clinicId = response['clinic_id'];
-        _initializeStreams();
-      } else {
-        // Fallback al clinic_id hardcodeado si no hay usuario autenticado
-        _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203';
-        _initializeStreams();
-      }
+      setState(() {
+        _patients = List<Map<String, dynamic>>.from(response);
+      });
     } catch (e) {
-      // Fallback al clinic_id hardcodeado en caso de error
-      _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203';
-      _initializeStreams();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cargar pacientes: ${e.toString()}'),
+          backgroundColor: home.AppColors.danger500,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  void _initializeStreams() {
-    if (_clinicId == null) return;
-
-    // Stream de pacientes hospitalizados desde v_app
-    _patientsStream = _supa
-        .from('v_app')
-        .stream(primaryKey: ['patient_id'])
-        .eq('clinic_id', _clinicId!)
-        .map((data) {
-          // Agrupar por patient_id para evitar duplicados
-          final Map<String, Map<String, dynamic>> uniquePatients = {};
-          for (final record in data) {
-            final patientId = record['patient_id'] ?? record['patient_uuid'];
-            if (patientId != null && !uniquePatients.containsKey(patientId)) {
-              uniquePatients[patientId] = record;
-            }
-          }
-
-          return uniquePatients.values
-              .where((p) => _isHospitalizedPatient(p))
-              .map((p) => PacienteResumen.fromMap(p))
-              .toList();
-        });
-
-    // Stream de tareas hospitalarias desde medical_records con department_code = 'HOSP'
-    _tasksStream = _supa
-        .from('medical_records')
-        .stream(primaryKey: ['id'])
-        .eq('clinic_id', _clinicId!)
-        .map((data) => data
-            .where((t) => t['department_code'] == 'HOSP')
-            .map((t) => TareaHosp.fromMap(t))
-            .toList());
-
-    // Stream de actualizaciones desde medical_records recientes
-    _updatesStream = _supa
-        .from('medical_records')
-        .stream(primaryKey: ['id'])
-        .eq('clinic_id', _clinicId!)
-        .map(
-            (data) => data.take(10).map((u) => UpdateItem.fromMap(u)).toList());
+  // Funciones auxiliares estáticas para obtener campos con fallback
+  static String? _getPatientMrn(Map<String, dynamic> patient) {
+    return patient['history_number'] ??
+        patient['mrn'] ??
+        patient['patient_mrn'] ??
+        patient['mrn_int']?.toString() ??
+        patient['patient_id'];
   }
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width > 1200;
-    final rightPanelWidth = showUpdates && isWide ? 360.0 : 0.0;
+    final filteredPatients = _patients.where((patient) {
+      if (_searchQuery.isEmpty) return true;
+      final mrn = _getPatientMrn(patient);
+      return patient['patient_name']?.toLowerCase().contains(_searchQuery) ||
+          (mrn?.toLowerCase().contains(_searchQuery) ?? false) ||
+          patient['owner_name']?.toLowerCase().contains(_searchQuery);
+    }).toList();
 
-    return Scaffold(
-      backgroundColor:
-          Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.15),
-      appBar: AppBar(
-        elevation: 0,
-        title: const Text('Panel de Hospitalización',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Buscar por nombre, MRN, dueño, especie...',
-                prefixIcon: const Icon(Iconsax.search_normal),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Colors.grey[100],
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          _botonPrimario(
-            context,
-            icon: Icons.add,
-            label: 'Añadir orden médica',
-            onTap: () {
-              _showAddTaskDialog(context);
-            },
-          ),
-          const SizedBox(width: 12),
-          IconButton(
-            tooltip: 'Mostrar actualizaciones',
-            onPressed: () => setState(() => showUpdates = !showUpdates),
-            icon: Icon(showUpdates
-                ? Icons.notifications_active
-                : Icons.notifications_none),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: StreamBuilder<List<PacienteResumen>>(
-        stream: _patientsStream,
-        builder: (context, patientsSnapshot) {
-          if (patientsSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (patientsSnapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text('Error al cargar pacientes: ${patientsSnapshot.error}'),
-                ],
-              ),
-            );
-          }
-
-          final patients = patientsSnapshot.data ?? [];
-          if (patients.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.local_hospital,
-                      size: 64, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  const Text('No hay pacientes hospitalizados'),
-                ],
-              ),
-            );
-          }
-
-          // Establecer paciente seleccionado por defecto
-          if (selectedPatientMrn == null && patients.isNotEmpty) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              setState(() => selectedPatientMrn = patients.first.mrn);
-            });
-          }
-
-          return Row(
-            children: [
-              // CONTENIDO PRINCIPAL
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _cardsPacientes(patients),
-                      const SizedBox(height: 16),
-                      _cabeceraVistas(context, patients),
-                      const SizedBox(height: 8),
-                      if (vista == _Vista.gantt)
-                        _vistaGantt(context, patients)
-                      else
-                        _vistaCalendarioPorPaciente(context, patients),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ),
-              // PANEL LATERAL ACTUALIZACIONES
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                width: rightPanelWidth,
-                child: showUpdates && isWide
-                    ? _panelActualizaciones(context)
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  // ----------------- UI SECTIONS -----------------
-
-  Widget _cardsPacientes(List<PacienteResumen> patients) {
-    // Filtrar pacientes según la búsqueda
-    final filteredPatients = _searchQuery.isEmpty
-        ? patients
-        : patients.where((p) {
-            return p.nombre.toLowerCase().contains(_searchQuery) ||
-                p.mrn.toLowerCase().contains(_searchQuery) ||
-                p.especie.toLowerCase().contains(_searchQuery) ||
-                p.raza.toLowerCase().contains(_searchQuery) ||
-                (p.ownerName?.toLowerCase().contains(_searchQuery) ?? false) ||
-                (p.recordTitle?.toLowerCase().contains(_searchQuery) ?? false);
-          }).toList();
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final cols =
-            MediaQuery.of(context).size.width ~/ 320; // ancho aprox por card
-        final crossAxisCount = cols.clamp(1, 4);
-        return GridView.builder(
-          primary: false,
-          shrinkWrap: true,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisExtent: 160,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: filteredPatients.length,
-          itemBuilder: (_, i) {
-            final p = filteredPatients[i];
-            final selected = p.mrn == selectedPatientMrn;
-            return _cardPaciente(p, selected: selected, onSelect: () {
-              setState(() => selectedPatientMrn = p.mrn);
-            });
-          },
-        );
-      },
-    );
-  }
-
-  Widget _cabeceraVistas(BuildContext context, List<PacienteResumen> patients) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.background,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)
-        ],
-      ),
-      child: Row(
-        children: [
-          const Text('Calendario de Tareas',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const Spacer(),
-          // Selector paciente (para vista Calendario)
-          SizedBox(
-            width: 260,
-            child: DropdownButtonFormField<String>(
-              value: selectedPatientMrn,
-              decoration: InputDecoration(
-                isDense: true,
-                labelText: 'Paciente',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              items: patients
-                  .map((p) => DropdownMenuItem<String>(
-                        value: p.mrn,
-                        child: Text('${p.nombre} — MRN ${p.mrn}'),
-                      ))
-                  .toList(),
-              onChanged: (v) => setState(() => selectedPatientMrn = v),
-            ),
-          ),
-          const SizedBox(width: 12),
-          _Segmented(
-            options: const ['Gantt', 'Calendario'],
-            selectedIndex: vista.index,
-            onChanged: (i) => setState(() => vista = _Vista.values[i]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Vista tipo Gantt: filas = pacientes, columnas = horas
-  Widget _vistaGantt(BuildContext context, List<PacienteResumen> patients) {
-    final horas = List.generate(13, (i) => 8 + i); // 08:00 -> 20:00
-    final anchoCol = 96.0;
-
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.background,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)
-        ],
-      ),
-      child: StreamBuilder<List<TareaHosp>>(
-        stream: _tasksStream,
-        builder: (context, tasksSnapshot) {
-          final tasks = tasksSnapshot.data ?? [];
-          final tasksByPatient = <String, List<TareaHosp>>{};
-          for (final task in tasks) {
-            tasksByPatient.putIfAbsent(task.patientMrn, () => []).add(task);
-          }
-
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints:
-                  BoxConstraints(minWidth: 160 + horas.length * anchoCol),
-              child: Column(
-                children: [
-                  // cabecera horas
-                  Row(
-                    children: [
-                      const SizedBox(width: 160),
-                      for (final h in horas)
-                        SizedBox(
-                          width: anchoCol,
-                          child: Center(
-                            child: Text('${h.toString().padLeft(2, '0')}:00',
-                                style: TextStyle(
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.color)),
-                          ),
-                        )
-                    ],
-                  ),
-                  const Divider(height: 16),
-                  // filas por paciente
-                  for (final p in patients)
-                    _filaGanttPaciente(context, p,
-                        tasks: tasksByPatient[p.mrn] ?? [],
-                        horas: horas,
-                        colWidth: anchoCol),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _filaGanttPaciente(BuildContext context, PacienteResumen p,
-      {required List<TareaHosp> tasks,
-      required List<int> horas,
-      required double colWidth}) {
-    final rowHeight = 64.0;
-    return Column(
-      children: [
-        SizedBox(
-          height: rowHeight,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 160,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: Text(p.nombre,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                ),
-              ),
-              // grid horas con posición absoluta de bloques
-              Expanded(
-                child: Stack(
-                  children: [
-                    Row(
-                      children: [
-                        for (int i = 0; i < horas.length; i++)
-                          _celdaHora(colWidth)
-                      ],
-                    ),
-                    // bloques
-                    for (final t in tasks)
-                      _bloqueTareaGantt(
-                        context,
-                        t,
-                        horas: horas,
-                        colWidth: colWidth,
-                        rowHeight: rowHeight,
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        Divider(height: 1, color: Colors.black.withOpacity(0.06)),
-      ],
-    );
-  }
-
-  Widget _celdaHora(double w) => Container(
-        width: w,
-        decoration: BoxDecoration(
-          border:
-              Border(right: BorderSide(color: Colors.black.withOpacity(0.05))),
-        ),
-      );
-
-  Widget _bloqueTareaGantt(BuildContext context, TareaHosp t,
-      {required List<int> horas,
-      required double colWidth,
-      required double rowHeight}) {
-    // calcular posición
-    double toDouble(TimeOfDay tod) => tod.hour + tod.minute / 60.0;
-    final start = toDouble(t.inicio);
-    final end = toDouble(t.fin);
-    final base = horas.first.toDouble();
-    final left = (start - base) * colWidth;
-    final width = (end - start) * colWidth;
-
-    final color = _colorTarea(context, t.tipo);
-    final textColor =
-        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-            ? Colors.white
-            : Colors.black87;
-
-    return Positioned(
-      left: left.clamp(0.0, double.infinity),
-      top: 8,
-      width: width,
-      height: rowHeight - 16,
+    return Dialog(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-            color: color, borderRadius: BorderRadius.circular(12)),
+        width: 600,
+        height: 500,
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_etiquetaTarea(t.tipo),
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    color: textColor)),
-            Text(t.titulo,
-                style:
-                    TextStyle(fontSize: 11, color: textColor.withOpacity(0.9))),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Vista Calendario: agenda diaria POR PACIENTE (selector arriba)
-  Widget _vistaCalendarioPorPaciente(
-      BuildContext context, List<PacienteResumen> patients) {
-    final mrn = selectedPatientMrn;
-    final patient =
-        patients.firstWhere((p) => p.mrn == mrn, orElse: () => patients.first);
-
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.background,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)
-        ],
-      ),
-      child: StreamBuilder<List<TareaHosp>>(
-        stream: _tasksStream,
-        builder: (context, tasksSnapshot) {
-          final allTasks = tasksSnapshot.data ?? [];
-          final items = allTasks.where((t) => t.patientMrn == mrn).toList()
-            ..sort((a, b) => a.inicio.hour.compareTo(b.inicio.hour));
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Agenda diaria — ${patient.nombre}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              _listaAgenda(items),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _listaAgenda(List<TareaHosp> items) {
-    String hhmm(TimeOfDay t) =>
-        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      separatorBuilder: (_, __) =>
-          Divider(color: Colors.black.withOpacity(0.06)),
-      itemBuilder: (_, i) {
-        final t = items[i];
-        final color = _colorTarea(context, t.tipo);
-
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-          leading: Container(
-            width: 10,
-            height: 44,
-            decoration: BoxDecoration(
-                color: color, borderRadius: BorderRadius.circular(8)),
-          ),
-          title: Text(t.titulo,
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: Text(
-              '${_etiquetaTarea(t.tipo)}  •  ${hhmm(t.inicio)} – ${hhmm(t.fin)}'),
-          trailing: _botonSecundario(context, label: 'Registrar', onTap: () {
-            // TODO: acción rápida para registrar ejecución (update en Supabase)
-          }),
-          onTap: () {
-            // TODO: abrir detalle/adjuntos del bloque
-          },
-        );
-      },
-    );
-  }
-
-  Widget _panelActualizaciones(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.background,
-        border: Border(left: BorderSide(color: Colors.black.withOpacity(0.06))),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
-            child: Row(
+            // Header
+            Row(
               children: [
-                const Text('Actualizaciones',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                Icon(
+                  Iconsax.add_circle,
+                  color: home.AppColors.primary500,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Seleccionar Paciente',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: home.AppColors.neutral900,
+                  ),
+                ),
                 const Spacer(),
                 IconButton(
-                  tooltip: 'Cerrar',
-                  onPressed: () => setState(() => showUpdates = false),
-                  icon: const Icon(Icons.close),
-                )
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Iconsax.close_circle),
+                ),
               ],
             ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: StreamBuilder<List<UpdateItem>>(
-              stream: _updatesStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
 
-                final updates = snapshot.data ?? [];
+            const SizedBox(height: 16),
 
-                return ListView.separated(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: updates.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) {
-                    final u = updates[i];
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceVariant
-                            .withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(child: Text(u.usuario.characters.first)),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(u.usuario,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 2),
-                                Text(u.texto),
-                              ],
-                            ),
+            // Búsqueda
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar por nombre, MRN o dueño...',
+                prefixIcon: Icon(Iconsax.search_normal, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: home.AppColors.neutral200),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      BorderSide(color: home.AppColors.primary500, width: 2),
+                ),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Lista de pacientes
+            Expanded(
+              child: _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : filteredPatients.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Iconsax.document_text,
+                                size: 48,
+                                color: home.AppColors.neutral400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No se encontraron pacientes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: home.AppColors.neutral600,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Text(u.hora,
-                              style: TextStyle(
-                                  color: Colors.black.withOpacity(0.5))),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
+                        )
+                      : ListView.builder(
+                          itemCount: filteredPatients.length,
+                          itemBuilder: (context, index) {
+                            final patient = filteredPatients[index];
+                            return _buildPatientItem(patient);
+                          },
+                        ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ----------------- MÉTODOS DE NEGOCIO -----------------
-
-  void _showAddTaskDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Añadir Orden Médica'),
-        content: const Text(
-            'Funcionalidad en desarrollo. Se integrará con medical_records.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ----------------- WIDGETS REUSABLES -----------------
-
-  Widget _cardPaciente(PacienteResumen p,
-      {required bool selected, required VoidCallback onSelect}) {
-    final estadoChip = _chipEstado(p.estado);
-    return InkWell(
-      onTap: onSelect,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.background,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 2))
-          ],
-          border: Border.all(
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.transparent,
-              width: 2),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                    radius: 28,
-                    backgroundImage:
-                        p.avatarUrl != null ? NetworkImage(p.avatarUrl!) : null,
-                    child: p.avatarUrl == null ? const Icon(Icons.pets) : null),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p.nombre,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 16)),
-                        Text('MRN: ${p.mrn}',
-                            style: TextStyle(
-                                color: Colors.black.withOpacity(0.6))),
-                        Text('${p.especie} / ${p.raza}',
-                            style: TextStyle(
-                                color: Colors.black.withOpacity(0.6))),
-                        if (p.ownerName != null)
-                          Text('Dueño: ${p.ownerName}',
-                              style: TextStyle(
-                                  color: Colors.black.withOpacity(0.5),
-                                  fontSize: 12)),
-                        if (p.recordTitle != null)
-                          Text('Último: ${p.recordTitle}',
-                              style: TextStyle(
-                                  color: Colors.black.withOpacity(0.5),
-                                  fontSize: 11)),
-                      ]),
-                ),
-                estadoChip,
-              ],
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                _botonPlano(
-                    label: 'Historia Clínica',
-                    onTap: () {
-                      // TODO: navega a utilities/visor.dart con MRN
-                    }),
-                const SizedBox(width: 8),
-                _botonPlano(
-                    label: 'Signos Vitales',
-                    onTap: () {
-                      // TODO: abrir modal de signos (rangos por color)
-                    }),
-                const SizedBox(width: 8),
-                _botonPlano(
-                    label: 'Notas',
-                    onTap: () {
-                      // TODO: notas rápidas vinculadas a medical_records
-                    }),
-              ],
-            )
           ],
         ),
       ),
     );
   }
 
-  Widget _chipEstado(EstadoPaciente e) {
-    Color bg;
-    Color fg;
-    switch (e) {
-      case EstadoPaciente.estable:
-        bg = const Color(0xFFE8F5E9);
-        fg = const Color(0xFF1B5E20);
-        break;
-      case EstadoPaciente.critico:
-        bg = const Color(0xFFFFEBEE);
-        fg = const Color(0xFFB71C1C);
-        break;
-      case EstadoPaciente.postqx:
-        bg = const Color(0xFFFFF8E1);
-        fg = const Color(0xFF7A5E00);
-        break;
-    }
+  Widget _buildPatientItem(Map<String, dynamic> patient) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(_etiquetaEstado(e),
-          style:
-              TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12)),
-    );
-  }
-
-  Widget _botonPlano({required String label, required VoidCallback onTap}) {
-    return ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        foregroundColor: Colors.black87,
-        backgroundColor: const Color(0xFFE5E7EB),
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-    );
-  }
-
-  Widget _botonSecundario(BuildContext context,
-      {required String label, required VoidCallback onTap}) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Text(label),
-    );
-  }
-
-  Widget _botonPrimario(BuildContext context,
-      {required IconData icon,
-      required String label,
-      required VoidCallback onTap}) {
-    return ElevatedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  // ----------------- HELPERS -----------------
-
-  Color _colorTarea(BuildContext context, TipoTarea tipo) {
-    switch (tipo) {
-      case TipoTarea.medicacion:
-        return const Color(0xFFBFDBFE); // azul claro
-      case TipoTarea.cirugia:
-        return const Color(0xFFFECACA); // rojo claro
-      case TipoTarea.laboratorio:
-        return const Color(0xFFCDECCF); // verde claro
-      case TipoTarea.cura:
-        return const Color(0xFFE9D5FF); // lila claro
-    }
-  }
-
-  String _etiquetaTarea(TipoTarea t) {
-    switch (t) {
-      case TipoTarea.medicacion:
-        return 'Medicación';
-      case TipoTarea.cirugia:
-        return 'Cirugía';
-      case TipoTarea.laboratorio:
-        return 'Laboratorio';
-      case TipoTarea.cura:
-        return 'Cura';
-    }
-  }
-
-  String _etiquetaEstado(EstadoPaciente e) {
-    switch (e) {
-      case EstadoPaciente.estable:
-        return 'Estable';
-      case EstadoPaciente.critico:
-        return 'Crítico';
-      case EstadoPaciente.postqx:
-        return 'Post-Qx';
-    }
-  }
-}
-
-// ----------------- MODELOS SIMPLES -----------------
-
-enum EstadoPaciente { estable, critico, postqx }
-
-class PacienteResumen {
-  final String mrn;
-  final String nombre;
-  final String especie;
-  final String raza;
-  final EstadoPaciente estado;
-  final String? avatarUrl;
-  final String? ownerName;
-  final String? ownerPhone;
-  final String? recordTitle;
-  final String? recordDate;
-
-  PacienteResumen({
-    required this.mrn,
-    required this.nombre,
-    required this.especie,
-    required this.raza,
-    required this.estado,
-    this.avatarUrl,
-    this.ownerName,
-    this.ownerPhone,
-    this.recordTitle,
-    this.recordDate,
-  });
-
-  factory PacienteResumen.fromMap(Map<String, dynamic> data) {
-    return PacienteResumen(
-      mrn: data['patient_mrn'] ?? data['history_number_snapshot'] ?? '',
-      nombre: data['patient_name'] ?? data['paciente_name_snapshot'] ?? '',
-      especie: _getSpeciesLabel(data['patient_species_code']),
-      raza: data['breed_label'] ?? data['breed'] ?? 'Sin especificar',
-      estado: _parseEstado(data['status'] ?? 'estable'),
-      avatarUrl: data['avatar_url'] ?? data['patient_avatar'],
-      ownerName: data['owner_name'] ?? data['owner_name_snapshot'],
-      ownerPhone: data['owner_phone'],
-      recordTitle: data['record_title'],
-      recordDate: data['record_date'],
-    );
-  }
-
-  static String _getSpeciesLabel(String? speciesCode) {
-    switch (speciesCode?.toUpperCase()) {
-      case 'CAN':
-        return 'Canino';
-      case 'FEL':
-        return 'Felino';
-      case 'AVE':
-        return 'Ave';
-      case 'EQU':
-        return 'Equino';
-      case 'BOV':
-        return 'Bovino';
-      case 'POR':
-        return 'Porcino';
-      case 'CAP':
-        return 'Caprino';
-      case 'OVI':
-        return 'Ovino';
-      default:
-        return speciesCode ?? 'Sin especificar';
-    }
-  }
-
-  static EstadoPaciente _parseEstado(String status) {
-    switch (status.toLowerCase()) {
-      case 'critico':
-      case 'critical':
-        return EstadoPaciente.critico;
-      case 'postqx':
-      case 'post_operative':
-        return EstadoPaciente.postqx;
-      case 'estable':
-      case 'stable':
-      case 'hospitalized':
-      default:
-        return EstadoPaciente.estable;
-    }
-  }
-}
-
-enum TipoTarea { medicacion, cirugia, laboratorio, cura }
-
-class TareaHosp {
-  final TipoTarea tipo;
-  final String titulo;
-  final TimeOfDay inicio;
-  final TimeOfDay fin;
-  final String patientMrn;
-
-  TareaHosp({
-    required this.tipo,
-    required this.titulo,
-    required this.inicio,
-    required this.fin,
-    required this.patientMrn,
-  });
-
-  factory TareaHosp.fromMap(Map<String, dynamic> data) {
-    return TareaHosp(
-      tipo: _parseTipoTarea(data['type'] ?? data['title'] ?? 'medicacion'),
-      titulo: data['title'] ?? data['record_title'] ?? '',
-      inicio: _parseTimeOfDay(data['start_time'] ?? data['date'] ?? '08:00'),
-      fin: _parseTimeOfDay(data['end_time'] ?? data['date'] ?? '09:00'),
-      patientMrn: data['patient_id'] ?? data['patient_mrn'] ?? '',
-    );
-  }
-
-  static TipoTarea _parseTipoTarea(String type) {
-    switch (type.toLowerCase()) {
-      case 'cirugia':
-      case 'surgery':
-        return TipoTarea.cirugia;
-      case 'laboratorio':
-      case 'lab':
-        return TipoTarea.laboratorio;
-      case 'cura':
-      case 'dressing':
-        return TipoTarea.cura;
-      case 'medicacion':
-      case 'medication':
-      default:
-        return TipoTarea.medicacion;
-    }
-  }
-
-  static TimeOfDay _parseTimeOfDay(String timeStr) {
-    try {
-      if (timeStr.contains('T')) {
-        // Formato ISO datetime
-        final dateTime = DateTime.parse(timeStr);
-        return TimeOfDay(hour: dateTime.hour, minute: dateTime.minute);
-      } else if (timeStr.contains(':')) {
-        // Formato HH:MM
-        final parts = timeStr.split(':');
-        return TimeOfDay(
-            hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-      }
-    } catch (e) {}
-    return const TimeOfDay(hour: 8, minute: 0); // Default
-  }
-}
-
-class UpdateItem {
-  final String usuario;
-  final String hora;
-  final String texto;
-
-  UpdateItem({required this.usuario, required this.hora, required this.texto});
-
-  factory UpdateItem.fromMap(Map<String, dynamic> data) {
-    final createdAt =
-        DateTime.tryParse(data['created_at'] ?? '') ?? DateTime.now();
-    final doctor = data['doctor'] ?? data['created_by'] ?? 'Sistema';
-
-    return UpdateItem(
-      usuario: doctor,
-      hora: DateFormat('HH:mm').format(createdAt),
-      texto: data['summary'] ?? data['title'] ?? 'Actualización del paciente',
-    );
-  }
-}
-
-// ----------------- CONTROLES UI -----------------
-
-class _Segmented extends StatelessWidget {
-  final List<String> options;
-  final int selectedIndex;
-  final ValueChanged<int> onChanged;
-  const _Segmented(
-      {required this.options,
-      required this.selectedIndex,
-      required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
+      margin: EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.6),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: home.AppColors.neutral200,
+          width: 1,
+        ),
       ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(options.length, (i) {
-          final selected = i == selectedIndex;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () => onChanged(i),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Theme.of(context).colorScheme.background
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
-                              blurRadius: 8)
-                        ]
-                      : null,
-                ),
+      child: InkWell(
+        onTap: () {
+          print('🔍 Paciente seleccionado: ${patient['patient_name']}');
+          print('🔍 ID del paciente: ${patient['patient_id']}');
+          Navigator.pop(context);
+          widget.onPatientSelected(patient);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Avatar del paciente
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: home.AppColors.primary100,
                 child: Text(
-                  options[i],
+                  patient['patient_name']?.substring(0, 1).toUpperCase() ?? '?',
                   style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).textTheme.bodyMedium?.color,
+                    color: home.AppColors.primary500,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-            ),
-          );
-        }),
+
+              const SizedBox(width: 16),
+
+              // Información del paciente
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      patient['patient_name'] ?? 'Sin nombre',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: home.AppColors.neutral900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'MRN: ${_getPatientMrn(patient) ?? 'N/A'}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: home.AppColors.neutral600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${patient['species_label'] ?? 'Sin especie'} / ${patient['breed_label'] ?? 'Sin raza'}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: home.AppColors.neutral600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Dueño: ${patient['owner_name'] ?? 'Sin dueño'}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: home.AppColors.neutral500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Botón de seleccionar
+              Icon(
+                Iconsax.arrow_right_3,
+                color: home.AppColors.primary500,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

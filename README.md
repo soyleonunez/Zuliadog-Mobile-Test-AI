@@ -62,115 +62,223 @@ Zuliadog es una aplicación de escritorio desarrollada en Flutter para la gesti�
 
 #### `clinics`
 ```sql
-- id (UUID, PK)
-- name (TEXT)
-- address (TEXT)
-- phone (TEXT)
-- email (TEXT)
-- created_at (TIMESTAMP)
+- id (UUID, PK) - Identificador único de la clínica
+- name (TEXT) - Nombre de la clínica
+- mrn_seq (BIGINT) - Secuencia para MRN
+- created_at (TIMESTAMP) - Fecha de creación
+- updated_at (TIMESTAMP) - Fecha de última actualización
 ```
 
 #### `patients`
 ```sql
-- id (UUID, PK)
-- clinic_id (UUID, FK)
-- name (TEXT)
-- mrn (TEXT, UNIQUE)
-- mrn_int (INTEGER)
-- species_id (UUID, FK)
-- breed_id (UUID, FK)
-- sex (TEXT)
-- birth_date (DATE)
-- created_at (TIMESTAMP)
+- id (UUID, PK) - Identificador único del paciente
+- clinic_id (UUID, FK) - ID de la clínica
+- owner_id (UUID, FK) - ID del dueño
+- mrn (TEXT, UNIQUE) - Medical Record Number
+- mrn_int (INTEGER) - MRN como entero
+- name (TEXT) - Nombre del paciente
+- species_code (TEXT, FK) - Código de especie
+- breed_id (UUID, FK) - ID de la raza
+- sex (TEXT) - Sexo del animal
+- birth_date (DATE) - Fecha de nacimiento
+- weight_kg (NUMERIC) - Peso en kg
+- notes (TEXT) - Notas adicionales
+- photo_path (TEXT) - Ruta de la foto
+- created_by (UUID, FK) - Usuario que creó el registro
+- created_at (TIMESTAMP) - Fecha de creación
+- updated_at (TIMESTAMP) - Fecha de última actualización
+- history_number (TEXT) - Número de historia
+- species (TEXT) - Especie (texto)
+- breed (TEXT) - Raza (texto)
+- owner_lastname (TEXT) - Apellido del dueño
+- admission_date (DATE) - Fecha de admisión
+- feeding (TEXT) - Información de alimentación
+- weight (NUMERIC) - Peso
+- temperature (NUMERIC) - Temperatura
+- pulse (INTEGER) - Pulso
+- respiration (INTEGER) - Respiración
+- hydration (TEXT) - Hidratación
+- temperamento (TEXT) - Temperamento
 ```
 
 #### `owners`
 ```sql
-- id (UUID, PK)
-- patient_id (UUID, FK)
-- name (TEXT)
-- phone (TEXT)
-- email (TEXT)
-- address (TEXT)
-- created_at (TIMESTAMP)
+- id (UUID, PK) - Identificador único del dueño
+- clinic_id (UUID, FK) - ID de la clínica
+- name (TEXT) - Nombre del dueño
+- phone (TEXT) - Teléfono
+- email (TEXT) - Email
+- address (TEXT) - Dirección
+- national_id (TEXT) - Cédula/DNI
+- created_at (TIMESTAMP) - Fecha de creación
+- updated_at (TIMESTAMP) - Fecha de última actualización
 ```
 
 #### `medical_records`
 ```sql
-- id (UUID, PK)
-- patient_id (UUID, FK)
-- clinic_id (UUID, FK)
-- content (TEXT)
-- is_locked (BOOLEAN)
-- locked_by (UUID, FK)
-- locked_at (TIMESTAMP)
-- created_at (TIMESTAMP)
+- id (UUID, PK) - Identificador único del registro
+- clinic_id (UUID, FK) - ID de la clínica
+- patient_id (TEXT, FK) - MRN del paciente
+- date (DATE) - Fecha del registro
+- title (TEXT) - Título del registro
+- summary (TEXT) - Resumen
+- doctor (TEXT) - Doctor que atendió
+- created_by (UUID, FK) - Usuario que creó el registro
+- created_at (TIMESTAMP) - Fecha de creación
+- updated_at (TIMESTAMP) - Fecha de última actualización
+- department_code (TEXT) - Código del departamento
+- locked (BOOLEAN) - Si está bloqueado
+- content_delta (TEXT) - Contenido delta para editor
 ```
 
 #### `clinic_roles`
 ```sql
-- id (UUID, PK)
-- user_id (UUID, FK)
-- clinic_id (UUID, FK)
-- role (TEXT)
-- department (TEXT)
-- is_active (BOOLEAN)
-- created_at (TIMESTAMP)
+- clinic_id (UUID, PK) - ID de la clínica
+- user_id (UUID, PK) - ID del usuario
+- email (TEXT) - Email del usuario
+- display_name (TEXT) - Nombre para mostrar
+- role (USER_ROLE) - Rol del usuario
+- is_active (BOOLEAN) - Si está activo
+- created_at (TIMESTAMP) - Fecha de creación
+- updated_at (TIMESTAMP) - Fecha de última actualización
 ```
 
 #### `breeds`
 ```sql
-- id (TEXT, PK)
-- name (TEXT)
-- species (TEXT)
-- image_bucket (TEXT)
-- image_key (TEXT)
-- image_url (TEXT)
-- created_at (TIMESTAMP)
+- id (UUID, PK) - Identificador único de la raza
+- species_code (TEXT, FK) - Código de especie
+- label (TEXT) - Nombre de la raza
+- image_bucket (TEXT) - Bucket de la imagen
+- image_key (TEXT) - Clave de la imagen
+- image_url (TEXT) - URL de la imagen
 ```
 
 #### `species`
 ```sql
-- id (UUID, PK)
-- label (TEXT)
-- created_at (TIMESTAMP)
+- code (TEXT, PK) - Código de la especie
+- label (TEXT) - Nombre de la especie
 ```
 
 #### `documents`
 ```sql
-- id (UUID, PK)
-- clinic_id (UUID, FK)
-- patient_id (UUID, FK)
-- name (TEXT)
-- ext (TEXT)
-- size_bytes (INTEGER)
-- storage_bucket (TEXT)
-- storage_key (TEXT)
-- uploaded_by (UUID, FK)
-- created_at (TIMESTAMP)
+- id (UUID, PK) - Identificador único del documento
+- clinic_id (UUID, FK) - ID de la clínica
+- patient_id (UUID, FK) - ID del paciente
+- owner_id (UUID, FK) - ID del dueño
+- path (TEXT) - Ruta del archivo
+- doc_type (DOC_TYPE) - Tipo de documento
+- tags (ARRAY) - Etiquetas
+- ext (TEXT) - Extensión del archivo
+- size_bytes (BIGINT) - Tamaño en bytes
+- storage_bucket (TEXT) - Bucket de almacenamiento
+- storage_key (TEXT) - Clave de almacenamiento
+- uploaded_by (UUID, FK) - Usuario que subió el archivo
+- created_at (TIMESTAMP) - Fecha de creación
+- tipo (TEXT) - Tipo de documento
+- paciente_id (UUID) - ID del paciente (alternativo)
+- mascota_id (UUID) - ID de la mascota
+- notes (TEXT) - Notas del documento
+- owner_name_snapshot (TEXT) - Nombre del dueño (snapshot)
+- history_number_snapshot (TEXT) - Número de historia (snapshot)
+- paciente_name_snapshot (TEXT) - Nombre del paciente (snapshot)
+- name (TEXT) - Nombre del archivo
+- record_id (UUID, FK) - ID del registro médico
+- in_lab_results (BOOLEAN) - Si está en resultados de laboratorio
+- in_medical_records (BOOLEAN) - Si está en registros médicos
+- in_system_files (BOOLEAN) - Si está en archivos del sistema
+- mime_type (TEXT) - Tipo MIME
+```
+
+### **Tablas de Sistema Integral**
+
+#### `hospitalization` (Tabla única de hospitalización)
+```sql
+- id (UUID, PK) - Identificador único del registro de hospitalización
+- clinic_id (UUID, FK) - ID de la clínica
+- patient_id (UUID, FK) - ID del paciente
+- admission_date (DATE) - Fecha de admisión
+- discharge_date (DATE) - Fecha de alta
+- status (TEXT) - Estado (active, discharged, transferred)
+- priority (TEXT) - Prioridad (low, normal, high, critical)
+- room_number (TEXT) - Número de habitación
+- bed_number (TEXT) - Número de cama
+- diagnosis (TEXT) - Diagnóstico
+- treatment_plan (TEXT) - Plan de tratamiento
+- special_instructions (TEXT) - Instrucciones especiales
+- assigned_vet (UUID, FK) - Veterinario asignado
+- created_by (UUID, FK) - Usuario que creó el registro
+- created_at (TIMESTAMP) - Fecha de creación
+- updated_at (TIMESTAMP) - Fecha de última actualización
+```
+
+#### `tasks` (Tabla general de tareas)
+```sql
+- id (UUID, PK) - Identificador único de la tarea
+- clinic_id (UUID, FK) - ID de la clínica
+- patient_id (UUID, FK) - ID del paciente (opcional)
+- hospitalization_id (UUID, FK) - ID de hospitalización (opcional)
+- task_type (TEXT) - Tipo de tarea (medication, feeding, exercise, monitoring, treatment, examination, vaccination, surgery, consultation, follow_up, lab_test, imaging, therapy, grooming, boarding)
+- title (TEXT) - Título de la tarea
+- description (TEXT) - Descripción
+- scheduled_time (TIMESTAMP) - Hora programada
+- duration_minutes (INTEGER) - Duración en minutos
+- frequency (TEXT) - Frecuencia (once, daily, twice_daily, every_4_hours, weekly, monthly)
+- status (TEXT) - Estado (pending, in_progress, completed, cancelled, overdue)
+- priority (TEXT) - Prioridad (low, normal, high, urgent)
+- medication_name (TEXT) - Nombre del medicamento
+- dosage (TEXT) - Dosis
+- route (TEXT) - Vía de administración (oral, iv, im, subcutaneous, topical, inhalation)
+- food_type (TEXT) - Tipo de comida
+- feeding_schedule (TEXT) - Horario de alimentación
+- exam_type (TEXT) - Tipo de examen
+- vital_signs (JSONB) - Signos vitales
+- special_instructions (TEXT) - Instrucciones especiales
+- completed_by (UUID, FK) - Usuario que completó la tarea
+- completed_at (TIMESTAMP) - Fecha de finalización
+- created_by (UUID, FK) - Usuario que creó la tarea
+- created_at (TIMESTAMP) - Fecha de creación
+- updated_at (TIMESTAMP) - Fecha de última actualización
+```
+
+#### `notes` (Tabla general de notas)
+```sql
+- id (UUID, PK) - Identificador único de la nota
+- clinic_id (UUID, FK) - ID de la clínica
+- patient_id (UUID, FK) - ID del paciente (opcional)
+- hospitalization_id (UUID, FK) - ID de hospitalización (opcional)
+- task_id (UUID, FK) - ID de la tarea (opcional)
+- note_type (TEXT) - Tipo de nota (general, vital_signs, behavior, appetite, medication_response, concern, improvement, observation, instruction, reminder, lab_result, imaging_result, treatment_response, owner_communication)
+- content (TEXT) - Contenido de la nota
+- is_important (BOOLEAN) - Si es importante
+- is_private (BOOLEAN) - Si es privada
+- tags (TEXT[]) - Etiquetas
+- created_by (UUID, FK) - Usuario que creó la nota
+- created_at (TIMESTAMP) - Fecha de creación
+- updated_at (TIMESTAMP) - Fecha de última actualización
+```
+
+#### `completions` (Tabla general de completiones)
+```sql
+- id (UUID, PK) - Identificador único de la completión
+- clinic_id (UUID, FK) - ID de la clínica
+- patient_id (UUID, FK) - ID del paciente (opcional)
+- task_id (UUID, FK) - ID de la tarea
+- completion_type (TEXT) - Tipo de completión (task_completed, medication_administered, feeding_completed, exam_performed, treatment_given, vital_signs_taken, lab_sample_collected, imaging_completed, therapy_session)
+- completion_status (TEXT) - Estado de completión (completed, partial, failed, cancelled)
+- completion_notes (TEXT) - Notas de completión
+- completion_data (JSONB) - Datos específicos (valores de signos vitales, etc.)
+- completed_by (UUID, FK) - Usuario que completó
+- completed_at (TIMESTAMP) - Fecha de completión
+- created_at (TIMESTAMP) - Fecha de creación
 ```
 
 ### **Vistas Principales**
 
-#### `v_app` (Vista Principal de Pacientes)
+#### `v_app` (Vista Integral de la Aplicación)
 ```sql
-SELECT 
-  p.id as patient_id,
-  p.clinic_id,
-  p.name as patient_name,
-  p.mrn as history_number,
-  p.mrn_int,
-  o.name as owner_name,
-  o.phone as owner_phone,
-  o.email as owner_email,
-  s.label as species_label,
-  b.label as breed_label,
-  b.id as breed_id,
-  p.sex
-FROM patients p
-LEFT JOIN owners o ON p.id = o.patient_id
-LEFT JOIN species s ON p.species_id = s.id
-LEFT JOIN breeds b ON p.breed_id = b.id;
+-- Vista completa que integra pacientes, hospitalización, tareas, notas y completiones
+-- Incluye estadísticas en tiempo real y última actividad
+-- Optimizada para el dashboard principal
 ```
 
 #### `patients_search`
