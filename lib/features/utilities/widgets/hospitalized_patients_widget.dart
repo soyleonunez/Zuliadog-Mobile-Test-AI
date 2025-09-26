@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../home.dart' as home;
-import '../../../features/data/data_service.dart';
+// DataService import removido para evitar problemas de carga
 import '../hospitalizacion.dart';
 
 class HospitalizedPatientsWidget extends StatelessWidget {
@@ -244,12 +244,27 @@ class HospitalizedPatientsWidget extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: ClipOval(
-                          child: DataService().buildBreedImageWidget(
-                            breedId: patient.breedId,
-                            species: patient.speciesLabel,
+                          child: Container(
                             width: 50,
                             height: 50,
-                            borderRadius: 25,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: home.AppColors.primary100,
+                            ),
+                            child: Center(
+                              child: Text(
+                                patient.patientName.isNotEmpty
+                                    ? patient.patientName
+                                        .substring(0, 1)
+                                        .toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                  color: home.AppColors.primary500,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -467,54 +482,7 @@ class HospitalizedPatientsWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildStatChip({
-    required IconData icon,
-    required String label,
-    required Color color,
-    bool expanded = false,
-  }) {
-    final chipWidget = Container(
-      padding: expanded
-          ? EdgeInsets.symmetric(horizontal: 6, vertical: 4)
-          : EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(expanded ? 6 : 3),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: expanded ? 10 : 6, color: color),
-          SizedBox(width: expanded ? 4 : 1),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: expanded ? 9 : 6,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    return expanded ? Expanded(child: chipWidget) : chipWidget;
-  }
-
-  Color _getPriorityColor(String? priority) {
-    switch (priority) {
-      case 'low':
-        return home.AppColors.success500;
-      case 'normal':
-        return home.AppColors.primary500;
-      case 'high':
-        return home.AppColors.warning500;
-      case 'critical':
-        return home.AppColors.danger500;
-      default:
-        return home.AppColors.neutral500;
-    }
-  }
+// _buildStatChip y _getPriorityColor métodos no utilizados removidos
 
   String _getPriorityLabel(String? priority) {
     switch (priority) {
@@ -531,50 +499,5 @@ class HospitalizedPatientsWidget extends StatelessWidget {
     }
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date).inDays;
-
-    if (difference == 0) {
-      return 'Hoy';
-    } else if (difference == 1) {
-      return 'Ayer';
-    } else if (difference < 7) {
-      return '${difference}d';
-    } else {
-      return '${date.day}/${date.month}';
-    }
-  }
-
-  String _calculateAge(String? birthDate) {
-    if (birthDate == null || birthDate.isEmpty) {
-      return 'No especificada';
-    }
-
-    try {
-      final birth = DateTime.parse(birthDate);
-      final now = DateTime.now();
-      int age = now.year - birth.year;
-
-      // Ajustar si aún no ha cumplido años este año
-      if (now.month < birth.month ||
-          (now.month == birth.month && now.day < birth.day)) {
-        age--;
-      }
-
-      if (age < 0) {
-        return 'Fecha inválida';
-      } else if (age == 0) {
-        // Calcular meses si es menor de 1 año
-        int months = now.month - birth.month;
-        if (now.day < birth.day) months--;
-        if (months <= 0) months = 1;
-        return '$months ${months == 1 ? 'mes' : 'meses'}';
-      } else {
-        return '$age ${age == 1 ? 'año' : 'años'}';
-      }
-    } catch (e) {
-      return 'Fecha inválida';
-    }
-  }
+// _formatDate y _calculateAge métodos no utilizados removidos
 }

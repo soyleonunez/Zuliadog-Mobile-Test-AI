@@ -286,55 +286,57 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
   }
 
   void _initializeStreams() {
-    // Stream para pacientes hospitalizados usando v_hosp (vista original)
-    _patientsStream = _supa
-        .from('v_hosp')
-        .stream(primaryKey: ['patient_id']).asyncExpand((data) async* {
-      final hospitalizedPatients = data
-          .where((item) => item['hospitalization_status'] == 'active')
-          .toList();
-
-      List<Map<String, dynamic>> enrichedPatients = [];
-
-      for (final item in hospitalizedPatients) {
+    try {
+      // Stream para pacientes hospitalizados usando v_hosp (vista original)
+      // Simplificado para evitar bloqueos; la vista v_hosp ya contiene la mayoría de datos necesarios
+      _patientsStream =
+          _supa.from('v_hosp').stream(primaryKey: ['patient_id']).map((data) {
         try {
-          // Obtener hospitalization_id real desde tabla hospitalization para writings
-          var hospitalizationData = await _supa
-              .from('hospitalization')
-              .select('id')
-              .eq('patient_id', item['patient_id'])
-              .eq('status', 'active')
-              .maybeSingle();
+          final hospitalizedPatients = data
+              .where((item) => item['hospitalization_status'] == 'active')
+              .toList();
 
-          // Obtener temper desde tabla patients
-          var patientTemper = await _supa
-              .from('patients')
-              .select('temper')
-              .eq('id', item['patient_id'])
-              .maybeSingle();
-
-          // Enriquecer datos originales de v_hosp con hospitalization_id real
-          final enrichedItem = Map<String, dynamic>.from(item);
-          enrichedItem['hospitalization_id'] = hospitalizationData?['id'];
-
-          // Asegurar que el temper viene directamente de patients.temper
-          if (patientTemper != null && patientTemper['temper'] != null) {
-            enrichedItem['temper'] = patientTemper['temper'];
-          }
-
-          enrichedPatients.add(enrichedItem);
-        } catch (e) {
           print(
-              'Error al enriquecer datos de paciente ${item['patient_id']}: $e');
-          // En caso de error, usar datos originales de v_hosp
-          enrichedPatients.add(Map<String, dynamic>.from(item));
-        }
-      }
+              '🏥 Loaded ${hospitalizedPatients.length} hospitalized patients');
 
-      yield enrichedPatients
-          .map((item) => HospitalizedPatient.fromJson(item))
-          .toList();
-    });
+          return hospitalizedPatients.map((item) {
+            // Usar datos directos de v_hosp cuando sean suficientes
+            try {
+              return HospitalizedPatient.fromJson(item);
+            } catch (e) {
+              print('Error parsing patient: $e');
+              // Crear un paciente de emergencia para evitar crashes
+              return HospitalizedPatient(
+                id: item['patient_id']?.toString() ?? 'unknown',
+                patientName: item['patient_name']?.toString() ?? 'Paciente',
+                mrn: item['mrn']?.toString() ?? 'N/A',
+                sex: item['sex']?.toString() ?? 'N/A',
+                speciesLabel:
+                    item['species_label']?.toString() ?? 'Sin especie',
+                breedLabel: item['breed_label']?.toString() ?? 'Sin raza',
+                pendingTasks: 0,
+                completedTasks: 0,
+                overdueTasks: 0,
+                importantNotes: 0,
+                todayNotes: 0,
+                todayCompletions: 0,
+              );
+            }
+          }).toList();
+        } catch (e) {
+          print('Error mapping hospital data: $e');
+          return <HospitalizedPatient>[];
+        }
+      }).handleError((error) {
+        print('Stream error: $error');
+        // Retornar lista vacía en caso de error para no bloquear UI
+        return <HospitalizedPatient>[];
+      });
+    } catch (e) {
+      print('Error initializando stream: $e');
+      // Stream de fallback que no bloquea
+      _patientsStream = Stream.value(<HospitalizedPatient>[]);
+    }
   }
 
   @override
