@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../home.dart' as home;
 import 'treatment_form_widget.dart';
+import 'treatment_card_widget.dart';
 
 final _supa = Supabase.instance.client;
 
@@ -124,12 +124,47 @@ class _TreatmentsWidgetState extends State<TreatmentsWidget> {
           return _buildEmptyState();
         }
 
-        return ListView.builder(
-          padding: EdgeInsets.all(16),
-          itemCount: filteredTreatments.length,
-          itemBuilder: (context, index) {
-            final treatment = filteredTreatments[index];
-            return _buildTreatmentItem(treatment);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Calcular número de columnas basado en el ancho disponible
+            int crossAxisCount;
+            double childAspectRatio;
+
+            if (constraints.maxWidth > 1200) {
+              crossAxisCount = 4; // Pantallas grandes: 4 columnas
+              childAspectRatio =
+                  1.3; // Más rectangular para evitar desbordamiento
+            } else if (constraints.maxWidth > 900) {
+              crossAxisCount = 3; // Pantallas medianas: 3 columnas
+              childAspectRatio =
+                  1.25; // Más rectangular para evitar desbordamiento
+            } else if (constraints.maxWidth > 600) {
+              crossAxisCount = 2; // Pantallas pequeñas: 2 columnas
+              childAspectRatio = 1.2; // Rectangular
+            } else {
+              crossAxisCount = 1; // Móviles: 1 columna
+              childAspectRatio = 1.5; // Más vertical para móviles
+            }
+
+            return GridView.builder(
+              padding: EdgeInsets.all(16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: childAspectRatio,
+                crossAxisSpacing: 12, // Reducido de 16 a 12
+                mainAxisSpacing: 12, // Reducido de 16 a 12
+              ),
+              itemCount: filteredTreatments.length,
+              itemBuilder: (context, index) {
+                final treatment = filteredTreatments[index];
+                return TreatmentCardWidget(
+                  treatment: treatment,
+                  onEdit: () => widget.onTreatmentEdit(treatment['id'] ?? ''),
+                  onComplete: () =>
+                      widget.onTreatmentComplete(treatment['id'] ?? ''),
+                );
+              },
+            );
           },
         );
       },
@@ -166,201 +201,6 @@ class _TreatmentsWidgetState extends State<TreatmentsWidget> {
         ],
       ),
     );
-  }
-
-  Widget _buildTreatmentItem(Map<String, dynamic> treatment) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 8),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _getTreatmentColor(treatment).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: _getTreatmentColor(treatment),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                _getTreatmentIcon(treatment),
-                size: 16,
-                color: _getTreatmentColor(treatment),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  treatment['medication_name'] ?? 'Tratamiento',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: home.AppColors.neutral900,
-                  ),
-                ),
-              ),
-              _buildStatusChip(treatment['status']),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Información del tratamiento
-          Row(
-            children: [
-              Expanded(
-                child: _buildInfoItem(
-                  'Dosis',
-                  treatment['dosage'] ?? 'No especificada',
-                ),
-              ),
-              Expanded(
-                child: _buildInfoItem(
-                  'Vía',
-                  treatment['administration_route'] ?? 'No especificada',
-                ),
-              ),
-            ],
-          ),
-
-          if (treatment['scheduled_date'] != null) ...[
-            const SizedBox(height: 4),
-            _buildInfoItem(
-              'Fecha',
-              DateFormat('dd/MM/yyyy HH:mm').format(
-                  DateTime.parse(treatment['scheduled_date'].toString())),
-            ),
-          ],
-
-          const SizedBox(height: 8),
-
-          // Botones de acción
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => widget.onTreatmentEdit(treatment['id']),
-                  icon: Icon(Iconsax.edit, size: 14),
-                  label: Text('Editar'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: home.AppColors.primary500,
-                    side: BorderSide(color: home.AppColors.primary500),
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => widget.onTreatmentComplete(treatment['id']),
-                  icon: Icon(Iconsax.tick_circle, size: 14),
-                  label: Text('Completar'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: home.AppColors.success500,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: home.AppColors.neutral500,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 12,
-            color: home.AppColors.neutral900,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusChip(String? status) {
-    Color color;
-    String label;
-
-    switch (status) {
-      case 'completed':
-        color = home.AppColors.success500;
-        label = 'Completado';
-        break;
-      case 'in_progress':
-        color = home.AppColors.warning500;
-        label = 'En Progreso';
-        break;
-      case 'pending':
-        color = home.AppColors.neutral500;
-        label = 'Pendiente';
-        break;
-      default:
-        color = home.AppColors.neutral500;
-        label = 'Pendiente';
-    }
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 8,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
-      ),
-    );
-  }
-
-  Color _getTreatmentColor(Map<String, dynamic> treatment) {
-    switch (treatment['follow_type']) {
-      case 'treatment':
-        return home.AppColors.primary500;
-      case 'medication':
-        return home.AppColors.success500;
-      case 'vital_signs':
-        return home.AppColors.warning500;
-      case 'evolution':
-        return home.AppColors.danger500;
-      default:
-        return home.AppColors.neutral500;
-    }
-  }
-
-  IconData _getTreatmentIcon(Map<String, dynamic> treatment) {
-    switch (treatment['follow_type']) {
-      case 'treatment':
-        return Iconsax.health;
-      case 'medication':
-        return Iconsax.health;
-      case 'vital_signs':
-        return Iconsax.heart;
-      case 'evolution':
-        return Iconsax.document_text;
-      default:
-        return Iconsax.health;
-    }
   }
 
   void _showAddTreatmentDialog() {

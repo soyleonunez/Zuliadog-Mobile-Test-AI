@@ -103,7 +103,7 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
       final followsData = await _supa
           .from('follows')
           .select(
-              'id, follow_type, medication_name, scheduled_date, scheduled_time, patient_id')
+              'id, follow_type, medication_name, medication_dosage, scheduled_date, scheduled_time, patient_id, duration_days, priority, status')
           .eq('follow_type', 'treatment')
           .eq('patient_id', selectedPatientId);
 
@@ -198,14 +198,21 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
               IconButton(
                 onPressed: () {
                   setState(() {
-                    _currentWeek = _currentWeek.subtract(Duration(days: 7));
+                    // Navegación semanal para calendario, quincenal para Gantt
+                    if (_currentView == CalendarView.week) {
+                      _currentWeek = _currentWeek.subtract(Duration(days: 7));
+                    } else {
+                      _currentWeek = _currentWeek.subtract(Duration(days: 15));
+                    }
                   });
                 },
                 icon: Icon(Iconsax.arrow_left_2, size: 16),
                 color: home.AppColors.neutral600,
               ),
               Text(
-                _getCurrentWeekRange(),
+                _currentView == CalendarView.week
+                    ? _getCurrentWeekRange()
+                    : _getCurrentBiweeklyRange(),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -215,7 +222,12 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
               IconButton(
                 onPressed: () {
                   setState(() {
-                    _currentWeek = _currentWeek.add(Duration(days: 7));
+                    // Navegación semanal para calendario, quincenal para Gantt
+                    if (_currentView == CalendarView.week) {
+                      _currentWeek = _currentWeek.add(Duration(days: 7));
+                    } else {
+                      _currentWeek = _currentWeek.add(Duration(days: 15));
+                    }
                   });
                 },
                 icon: Icon(Iconsax.arrow_right_2, size: 16),
@@ -421,7 +433,7 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
   }
 
   Widget _buildGanttView() {
-    final weekDays = _getWeekDays(_currentWeek);
+    final biweeklyDays = _getBiweeklyDays(_currentWeek);
 
     // ⚡ USAR DATOS EN CACHÉ EN LUGAR DE STREAM PARA EVITAR "SAME STREAM LISTENED" ERROR
     if (_isLoading) {
@@ -472,10 +484,10 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
                 textAlign: TextAlign.center,
               ),
             ),
-          // Header con días de la semana
-          _buildHTMLStyleWeekHeader(weekDays),
+          // Header con días de la quincena
+          _buildBiweeklyHeader(biweeklyDays),
           const SizedBox(height: 8),
-          // Grid del timeline como en HTML
+          // Grid del timeline limpio
           Expanded(
             child: treatments.isEmpty
                 ? Center(
@@ -486,241 +498,10 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
                       style: TextStyle(color: home.AppColors.neutral500),
                     ),
                   )
-                : _buildHTMLLikeGantt(treatments, weekDays),
+                : _buildCleanGantt(treatments, biweeklyDays),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildHTMLStyleWeekHeader(List<DateTime> weekDays) {
-    return Container(
-      height: 45,
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: home.AppColors.neutral200, width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Columna fija para "Paciente"
-          Container(
-            width: 120,
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: home.AppColors.neutral50,
-              border: Border(
-                right: BorderSide(color: home.AppColors.neutral200, width: 1),
-              ),
-            ),
-            child: Center(
-              child: Text(
-                'Paciente',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: home.AppColors.neutral700,
-                ),
-              ),
-            ),
-          ),
-          // Columnas de días de la semana - estilo compacto como en la imagen
-          ...weekDays.map((day) {
-            final isToday = _isSameDay(day, DateTime.now());
-            return Expanded(
-              child: Container(
-                height: 45,
-                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                decoration: BoxDecoration(
-                  border: Border(
-                    right:
-                        BorderSide(color: home.AppColors.neutral200, width: 1),
-                    bottom:
-                        BorderSide(color: home.AppColors.neutral200, width: 1),
-                  ),
-                  color: isToday
-                      ? home.AppColors.primary100
-                      : home.AppColors.neutral50,
-                ),
-                child: Center(
-                  child: Text(
-                    '${_getDayAbbreviation(day)} ${day.day}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isToday
-                          ? home.AppColors.primary700
-                          : home.AppColors.neutral700,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHTMLLikeGantt(
-      List<Map<String, dynamic>> treatments, List<DateTime> weekDays) {
-    // Agrupar tratamientos por paciente como en el ejemplo HTML
-    Map<String, List<Map<String, dynamic>>> treatmentsByPatient = {};
-
-    for (var treatment in treatments) {
-      String patientName = treatment['patient_name'] ?? 'Paciente';
-      if (!treatmentsByPatient.containsKey(patientName)) {
-        treatmentsByPatient[patientName] = [];
-      }
-      treatmentsByPatient[patientName]!.add(treatment);
-    }
-
-    print(
-        '🔍 Gantt treatments by patient: ${treatmentsByPatient.keys.toList()}');
-
-    if (treatmentsByPatient.isEmpty) {
-      return Container(
-        height: 200,
-        child: Center(
-          child: Text(
-            'No hay tratamientos programados\npara mostrar en el Gantt',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: home.AppColors.neutral500,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      height: treatmentsByPatient.length * 60.0 + 20,
-      child: Column(
-        children: treatmentsByPatient.entries.map((entry) {
-          String patientName = entry.key;
-          List<Map<String, dynamic>> patientTreatments = entry.value;
-
-          return Container(
-            height: 60,
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: home.AppColors.neutral200, width: 1),
-              ),
-            ),
-            child: Row(
-              children: [
-                // Nombre del paciente - columna fija
-                Container(
-                  width: 120,
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      right: BorderSide(
-                          color: home.AppColors.neutral200, width: 1),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      patientName,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: home.AppColors.neutral900,
-                      ),
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ),
-                ),
-                // Grid de días - estilo matriz simple
-                Expanded(
-                  child: _buildSimpleGanttGrid(patientTreatments, weekDays),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildSimpleGanttGrid(
-      List<Map<String, dynamic>> treatments, List<DateTime> weekDays) {
-    return Row(
-      children: weekDays.map((day) {
-        final dayTreatments = treatments.where((treatment) {
-          if (treatment['scheduled_date'] == null) return false;
-          try {
-            final targetDate =
-                DateTime.parse(treatment['scheduled_date'].toString());
-            return _isSameDay(targetDate, day);
-          } catch (e) {
-            return false;
-          }
-        }).toList();
-
-        return Expanded(
-          child: Container(
-            height: 60,
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(color: home.AppColors.neutral200, width: 1),
-              ),
-            ),
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: dayTreatments.isEmpty
-                  ? Container() // Celda vacía como en la imagen
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: dayTreatments.map((treatment) {
-                        return GestureDetector(
-                          onTap: () => widget.onTreatmentTap(treatment['id']),
-                          child: Container(
-                            width: double.infinity,
-                            margin: EdgeInsets.only(bottom: 2),
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: _getTreatmentColor(treatment),
-                              borderRadius: BorderRadius.circular(6),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
-                                  blurRadius: 3,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Text(
-                              treatment['medication_name'] ?? 'Tratamiento',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black.withOpacity(0.25),
-                                    offset: Offset(0, 1),
-                                    blurRadius: 1,
-                                  ),
-                                ],
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -952,5 +733,487 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
     final start = _getWeekStart(_currentWeek);
     final end = start.add(Duration(days: 6));
     return '${DateFormat('dd MMM', 'es').format(start)} - ${DateFormat('dd MMM yyyy', 'es').format(end)}';
+  }
+
+  String _getCurrentBiweeklyRange() {
+    final start = _currentWeek.subtract(Duration(days: 7));
+    final end = start.add(Duration(days: 14));
+    return '${DateFormat('dd MMM', 'es').format(start)} - ${DateFormat('dd MMM yyyy', 'es').format(end)}';
+  }
+
+  List<DateTime> _getBiweeklyDays(DateTime date) {
+    // Crear un rango de 15 días centrado en la fecha actual
+    final start = date.subtract(Duration(days: 7)); // 7 días antes
+    return List.generate(15, (index) => start.add(Duration(days: index)));
+  }
+
+  /// Construye el header con los días de la quincena
+  Widget _buildBiweeklyHeader(List<DateTime> biweeklyDays) {
+    return Container(
+      height: 40,
+      padding: EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: home.AppColors.neutral50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: home.AppColors.neutral200),
+      ),
+      child: Row(
+        children: [
+          // Columna fija para "Medicamento"
+          Container(
+            width: 250, // Aumentada para acomodar medicamento + badge
+            child: Center(
+              child: Text(
+                'Medicamento',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: home.AppColors.neutral700,
+                ),
+              ),
+            ),
+          ),
+
+          // Días de la quincena
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final dayWidth = constraints.maxWidth / biweeklyDays.length;
+                return Stack(
+                  children: biweeklyDays.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final day = entry.value;
+                    final isToday = _isSameDay(day, DateTime.now());
+
+                    return Positioned(
+                      left: index * dayWidth,
+                      top: 0,
+                      child: Container(
+                        width: dayWidth,
+                        height: 40,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _getDayAbbreviation(day),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: isToday
+                                      ? home.AppColors.primary700
+                                      : home.AppColors.neutral600,
+                                ),
+                              ),
+                              Text(
+                                day.day.toString(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isToday
+                                      ? home.AppColors.primary700
+                                      : home.AppColors.neutral900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Construye el Gantt limpio sin divisiones de días, con vista quincenal
+  Widget _buildCleanGantt(
+      List<Map<String, dynamic>> treatments, List<DateTime> biweeklyDays) {
+    // Filtrar tratamientos válidos y crear una entrada por cada medicamento
+    List<Map<String, dynamic>> validTreatments = treatments.where((treatment) {
+      return treatment['scheduled_date'] != null &&
+          treatment['medication_name'] != null &&
+          treatment['medication_name'].toString().isNotEmpty;
+    }).toList();
+
+    if (validTreatments.isEmpty) {
+      return Container(
+        height: 200,
+        child: Center(
+          child: Text(
+            'No hay tratamientos programados\npara mostrar en el Gantt',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: home.AppColors.neutral500,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Configuración para el Gantt con mínimo de filas
+    final minRows = 9;
+    final rowHeight = 80.0;
+    final marginBetweenRows = 8.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return ListView.builder(
+          itemCount: minRows, // Siempre mostrar al menos 9 filas
+          itemBuilder: (context, index) {
+            // Si hay tratamientos reales para este índice
+            if (index < validTreatments.length) {
+              final treatment = validTreatments[index];
+              String medicationName =
+                  treatment['medication_name'] ?? 'Medicamento';
+              String dosage = treatment['medication_dosage'] ?? 'Sin dosis';
+              String status = treatment['status'] ?? 'pending';
+
+              return Container(
+                height: rowHeight,
+                margin: EdgeInsets.only(bottom: marginBetweenRows),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: home.AppColors.neutral200),
+                ),
+                child: Row(
+                  children: [
+                    // Etiqueta del medicamento con badge de estado - columna fija
+                    Container(
+                      width: 250,
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: home.AppColors.neutral50,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          bottomLeft: Radius.circular(8),
+                        ),
+                        border: Border(
+                          right: BorderSide(color: home.AppColors.neutral200),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Nombre del medicamento
+                          Text(
+                            medicationName,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: home.AppColors.neutral900,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(height: 4),
+                          // Dosis y Badge de estado en la misma línea
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Dosis: $dosage',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: home.AppColors.neutral600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              // Badge de estado
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color:
+                                      _getStatusColor(status).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: _getStatusColor(status)
+                                        .withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  _getStatusLabel(status),
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w500,
+                                    color: _getStatusColor(status),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Área de tratamientos - sin divisiones
+                    Expanded(
+                      child: Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: _buildTreatmentTimeline(
+                            [treatment], biweeklyDays, constraints),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              // Fila vacía para llegar al mínimo
+              return Container(
+                height: rowHeight,
+                margin: EdgeInsets.only(bottom: marginBetweenRows),
+                decoration: BoxDecoration(
+                  color: home.AppColors.neutral100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: home.AppColors.neutral100),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 250,
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: home.AppColors.neutral50,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          bottomLeft: Radius.circular(8),
+                        ),
+                        border: Border(
+                          right: BorderSide(color: home.AppColors.neutral200),
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Fila vacía',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                            color: home.AppColors.neutral400,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: home.AppColors.neutral100,
+                            borderRadius: BorderRadius.circular(4),
+                            border:
+                                Border.all(color: home.AppColors.neutral100),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+          },
+        );
+      },
+    );
+  }
+
+  /// Construye el timeline de tratamientos para un paciente
+  Widget _buildTreatmentTimeline(List<Map<String, dynamic>> treatments,
+      List<DateTime> biweeklyDays, BoxConstraints constraints) {
+    final dayWidth = constraints.maxWidth / biweeklyDays.length;
+    final List<Widget> treatmentBars = [];
+
+    for (var treatment in treatments) {
+      if (treatment['scheduled_date'] == null) continue;
+
+      try {
+        final startDate =
+            DateTime.parse(treatment['scheduled_date'].toString());
+        final durationDays = treatment['duration_days'] ?? 1;
+        final medicationName = treatment['medication_name'] ?? 'Tratamiento';
+
+        // Encontrar el índice del día de inicio en la quincena actual
+        final startDayIndex =
+            biweeklyDays.indexWhere((day) => _isSameDay(day, startDate));
+
+        print(
+            '🔍 Treatment: $medicationName, Start: $startDate, Duration: $durationDays');
+        print('🔍 Start day index: $startDayIndex');
+        print(
+            '🔍 Biweekly days range: ${biweeklyDays.first} to ${biweeklyDays.last}');
+
+        // Si el tratamiento no está en esta quincena, saltarlo
+        if (startDayIndex == -1) {
+          print('⚠️ Treatment not in current biweekly range');
+          continue;
+        }
+
+        // Calcular cuántos días del tratamiento están visibles en esta quincena
+        final endDayIndex = (startDayIndex + durationDays - 1)
+            .clamp(0, biweeklyDays.length - 1);
+        final visibleDays = endDayIndex - startDayIndex + 1;
+
+        // Calcular posición y ancho
+        final leftPosition = startDayIndex * dayWidth;
+        final treatmentWidth = dayWidth * visibleDays;
+
+        // Información del tratamiento
+        final dosage = treatment['medication_dosage'] ?? '';
+        final startDateStr = DateFormat('dd/MM').format(startDate);
+        final endDate = startDate.add(Duration(days: durationDays - 1));
+        final endDateStr = DateFormat('dd/MM').format(endDate);
+
+        treatmentBars.add(
+          Positioned(
+            left:
+                leftPosition.clamp(0.0, constraints.maxWidth - treatmentWidth),
+            top: 8, // Centrado verticalmente en la fila de 80px
+            child: GestureDetector(
+              onTap: () => widget.onTreatmentTap(treatment['id']),
+              child: Container(
+                width: treatmentWidth.clamp(
+                    0.0,
+                    constraints.maxWidth -
+                        leftPosition.clamp(0.0, constraints.maxWidth)),
+                height: 64, // Ajustado para la nueva altura de fila
+                margin: EdgeInsets.symmetric(
+                    horizontal: 1), // Reducido para evitar desbordamiento
+                padding: EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 6), // Ajustado
+                decoration: BoxDecoration(
+                  color: _getTreatmentColor(treatment),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Primera línea: Nombre del medicamento + Dosis alineada a la derecha
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            medicationName,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (dosage.isNotEmpty) ...[
+                          SizedBox(width: 8),
+                          Text(
+                            dosage,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+
+                    // Segunda línea: Fechas y duración (solo si dura más de 1 día)
+                    if (durationDays > 1) ...[
+                      SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '$startDateStr - $endDateStr',
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          ),
+                          Text(
+                            '${durationDays} días',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      } catch (e) {
+        print('Error processing treatment: $e');
+        continue;
+      }
+    }
+
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: treatmentBars,
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+      case 'scheduled':
+        return home.AppColors.warning500;
+      case 'completed':
+      case 'done':
+        return home.AppColors.success500;
+      case 'cancelled':
+        return home.AppColors.danger500;
+      case 'in_progress':
+        return home.AppColors.primary500;
+      default:
+        return home.AppColors.neutral500;
+    }
+  }
+
+  String _getStatusLabel(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'Pendiente';
+      case 'scheduled':
+        return 'Programado';
+      case 'completed':
+      case 'done':
+        return 'Completado';
+      case 'cancelled':
+        return 'Cancelado';
+      case 'in_progress':
+        return 'En Progreso';
+      default:
+        return 'Desconocido';
+    }
   }
 }

@@ -640,13 +640,110 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
   }
 
   void _editTreatment(String treatmentId) {
-    // Implementar edición de tratamiento
-    print('Editando tratamiento: $treatmentId');
+    // Mostrar diálogo de edición de tratamiento
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Editar Tratamiento'),
+        content: Text('¿Desea editar este tratamiento?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Aquí se puede implementar la lógica de edición
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Funcionalidad de edición en desarrollo'),
+                  backgroundColor: home.AppColors.warning500,
+                ),
+              );
+            },
+            child: Text('Editar'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _completeTreatment(String treatmentId) {
-    // Implementar completar tratamiento
-    print('Completando tratamiento: $treatmentId');
+    // Mostrar diálogo de confirmación para completar tratamiento
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Completar Tratamiento'),
+        content: Text(
+            '¿Está seguro de que desea marcar este tratamiento como completado?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _updateTreatmentStatus(treatmentId, 'completed');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: home.AppColors.success500,
+            ),
+            child: Text('Completar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateTreatmentStatus(
+      String treatmentId, String newStatus) async {
+    try {
+      // Actualizar el estado del tratamiento en la base de datos
+      await _supa.from('follows').update({
+        'status': newStatus,
+        'completion_status': newStatus == 'completed' ? 'completed' : 'pending',
+        'completed_at': newStatus == 'completed'
+            ? DateTime.now().toUtc().toIso8601String()
+            : null,
+      }).eq('id', treatmentId);
+
+      // Mostrar mensaje de éxito
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tratamiento marcado como completado'),
+          backgroundColor: home.AppColors.success500,
+        ),
+      );
+
+      // Recargar los tratamientos para reflejar el cambio
+      if (_selectedPatientId != null) {
+        _loadPatientTreatmentsInCalendar(HospitalizedPatient(
+          id: _selectedPatientId!,
+          patientName: 'Paciente',
+          mrn: '',
+          sex: '',
+          speciesLabel: '',
+          breedLabel: '',
+          hospitalizationId: _selectedHospitalizationId ?? '',
+          pendingTasks: 0,
+          completedTasks: 0,
+          overdueTasks: 0,
+          importantNotes: 0,
+          todayNotes: 0,
+          todayCompletions: 0,
+        ));
+      }
+    } catch (e) {
+      print('Error updating treatment status: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al actualizar el tratamiento'),
+          backgroundColor: home.AppColors.danger500,
+        ),
+      );
+    }
   }
 
   Future<void> _addPatientToHospitalization(
