@@ -554,50 +554,95 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
       padding: EdgeInsets.all(2),
       child: Column(
         children: dayTreatments.map((treatment) {
-          return GestureDetector(
-            onTap: () => widget.onTreatmentTap(treatment['id']),
-            child: Container(
-              margin: EdgeInsets.only(bottom: 2),
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: _getTreatmentColor(treatment),
-                borderRadius: BorderRadius.circular(6),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 3,
-                    offset: Offset(0, 1),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    treatment['medication_name'] ?? 'Tratamiento',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (treatment['scheduled_time'] != null) ...[
-                    SizedBox(height: 1),
-                    Text(
-                      _formatTimeToString(treatment['scheduled_time']),
-                      style: TextStyle(
-                        fontSize: 7,
-                        color: Colors.white.withOpacity(0.9),
-                        fontWeight: FontWeight.w500,
+          return Container(
+            margin: EdgeInsets.only(bottom: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => widget.onTreatmentTap(treatment['id']),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _getTreatmentColor(treatment),
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 3,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            treatment['medication_name'] ?? 'Tratamiento',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (treatment['scheduled_time'] != null) ...[
+                            SizedBox(height: 1),
+                            Text(
+                              _formatTimeToString(treatment['scheduled_time']),
+                              style: TextStyle(
+                                fontSize: 7,
+                                color: Colors.white.withOpacity(0.9),
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Botones de acción
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => widget.onTreatmentEdit(treatment['id']),
+                      child: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Icon(
+                          Iconsax.edit,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 2),
+                    GestureDetector(
+                      onTap: () => widget.onTreatmentComplete(treatment['id']),
+                      child: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Icon(
+                          Iconsax.tick_circle,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ],
-                ],
-              ),
+                ),
+              ],
             ),
           );
         }).toList(),
@@ -1083,89 +1128,138 @@ class _CalendarGanttWidgetState extends State<CalendarGanttWidget> {
             left:
                 leftPosition.clamp(0.0, constraints.maxWidth - treatmentWidth),
             top: 8, // Centrado verticalmente en la fila de 80px
-            child: GestureDetector(
-              onTap: () => widget.onTreatmentTap(treatment['id']),
-              child: Container(
-                width: treatmentWidth.clamp(
-                    0.0,
-                    constraints.maxWidth -
-                        leftPosition.clamp(0.0, constraints.maxWidth)),
-                height: 64, // Ajustado para la nueva altura de fila
-                margin: EdgeInsets.symmetric(
-                    horizontal: 1), // Reducido para evitar desbordamiento
-                padding: EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 6), // Ajustado
-                decoration: BoxDecoration(
-                  color: _getTreatmentColor(treatment),
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Primera línea: Nombre del medicamento + Dosis alineada a la derecha
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            medicationName,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (dosage.isNotEmpty) ...[
-                          SizedBox(width: 8),
-                          Text(
-                            dosage,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-
-                    // Segunda línea: Fechas y duración (solo si dura más de 1 día)
-                    if (durationDays > 1) ...[
-                      SizedBox(height: 2),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Container(
+              width: treatmentWidth.clamp(
+                  0.0,
+                  constraints.maxWidth -
+                      leftPosition.clamp(0.0, constraints.maxWidth)),
+              height: 64, // Ajustado para la nueva altura de fila
+              margin: EdgeInsets.symmetric(
+                  horizontal: 1), // Reducido para evitar desbordamiento
+              decoration: BoxDecoration(
+                color: _getTreatmentColor(treatment),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  // Contenido principal del tratamiento
+                  GestureDetector(
+                    onTap: () => widget.onTreatmentTap(treatment['id']),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 6), // Ajustado
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            '$startDateStr - $endDateStr',
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: Colors.white.withOpacity(0.8),
-                            ),
+                          // Primera línea: Nombre del medicamento + Dosis alineada a la derecha
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  medicationName,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (dosage.isNotEmpty) ...[
+                                SizedBox(width: 8),
+                                Text(
+                                  dosage,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withOpacity(0.9),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          Text(
-                            '${durationDays} días',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withOpacity(0.8),
+
+                          // Segunda línea: Fechas y duración (solo si dura más de 1 día)
+                          if (durationDays > 1) ...[
+                            SizedBox(height: 2),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '$startDateStr - $endDateStr',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.white.withOpacity(0.8),
+                                  ),
+                                ),
+                                Text(
+                                  '${durationDays} días',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withOpacity(0.8),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
+                          ],
                         ],
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                  // Botones de acción en la esquina superior derecha
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => widget.onTreatmentEdit(treatment['id']),
+                          child: Container(
+                            padding: EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Icon(
+                              Iconsax.edit,
+                              size: 10,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 2),
+                        GestureDetector(
+                          onTap: () =>
+                              widget.onTreatmentComplete(treatment['id']),
+                          child: Container(
+                            padding: EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Icon(
+                              Iconsax.tick_circle,
+                              size: 10,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

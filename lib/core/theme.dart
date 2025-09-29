@@ -401,3 +401,128 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
+
+// =====================================================
+// CLASES DE ESTILOS PARA COMPATIBILIDAD
+// =====================================================
+
+class AppColors {
+  // Colores primarios
+  static const primary500 = Color(0xFF5E81F4);
+  static const primary600 = Color(0xFF4B6BE0);
+  static const primary700 = Color(0xFF3B5BD6);
+  static const primary200 = Color(0xFFB8C8FF);
+  static const primary100 = Color(0xFFD6E2FF);
+  static const primary50 = Color(0xFFF0F4FF);
+
+  // Colores neutros
+  static const neutral900 = Color(0xFF0E1116);
+  static const neutral700 = Color(0xFF2C333A);
+  static const neutral600 = Color(0xFF475467);
+  static const neutral500 = Color(0xFF667085);
+  static const neutral400 = Color(0xFF98A2B3);
+  static const neutral300 = Color(0xFFD1D5DB);
+  static const neutral200 = Color(0xFFE5E7EB);
+  static const neutral100 = Color(0xFFF1F3F4);
+  static const neutral50 = Color(0xFFF8FAFC);
+
+  // Colores de estado
+  static const success500 = Color(0xFF22C55E);
+  static const success50 = Color(0xFFF0FDF4);
+  static const success200 = Color(0xFFBBF7D0);
+  static const success700 = Color(0xFF15803D);
+
+  static const warning500 = Color(0xFFF59E0B);
+  static const warning50 = Color(0xFFFEFBF3);
+  static const warning200 = Color(0xFFFDE68A);
+  static const warning700 = Color(0xFFB45309);
+
+  static const danger500 = Color(0xFFEF4444);
+  static const danger50 = Color(0xFFFEF2F2);
+  static const danger200 = Color(0xFFFECACA);
+  static const danger700 = Color(0xFFB91C1C);
+
+  // Colores rojos (para errores)
+  static const red50 = Color(0xFFFEF2F2);
+  static const red200 = Color(0xFFFECACA);
+  static const red500 = Color(0xFFEF4444);
+  static const red700 = Color(0xFFB91C1C);
+}
+
+class AppText {
+  // Títulos
+  static const heading1 = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.bold,
+    color: AppColors.neutral900,
+  );
+
+  static const heading2 = TextStyle(
+    fontSize: 24,
+    fontWeight: FontWeight.bold,
+    color: AppColors.neutral900,
+  );
+
+  static const heading3 = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    color: AppColors.neutral900,
+  );
+
+  // Texto del cuerpo
+  static const bodyLarge = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    color: AppColors.neutral900,
+  );
+
+  static const bodyMedium = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: AppColors.neutral900,
+  );
+
+  static const bodySmall = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    color: AppColors.neutral900,
+  );
+
+  // Texto de etiquetas
+  static const label = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: AppColors.neutral900,
+  );
+
+  // Estilos heredados (para compatibilidad)
+  static const titleL = TextStyle(
+    fontSize: 30,
+    fontWeight: FontWeight.w700,
+    color: AppColors.neutral900,
+  );
+
+  static const titleM = TextStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w600,
+    color: AppColors.neutral900,
+  );
+
+  static const titleS = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    color: AppColors.neutral900,
+  );
+
+  static const bodyM = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w500,
+    color: AppColors.neutral900,
+  );
+
+  static const bodyS = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+    color: AppColors.neutral900,
+  );
+}

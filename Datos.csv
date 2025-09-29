@@ -1,0 +1,117 @@
+table_name,column_name,data_type,is_nullable,column_default,ordinal_position
+breeds,id,uuid,NO,gen_random_uuid(),1
+breeds,species_code,text,NO,null,2
+breeds,species_label,text,NO,null,3
+breeds,label,text,NO,null,4
+breeds,description,text,YES,null,5
+breeds,image_url,text,YES,null,6
+breeds,created_at,timestamp with time zone,YES,now(),7
+breeds,updated_at,timestamp with time zone,YES,now(),8
+clinics,id,uuid,NO,gen_random_uuid(),1
+clinics,name,text,NO,null,2
+clinics,address,text,YES,null,3
+clinics,phone,text,YES,null,4
+clinics,email,text,YES,null,5
+clinics,created_at,timestamp with time zone,YES,now(),6
+clinics,updated_at,timestamp with time zone,YES,now(),7
+follows,id,uuid,NO,gen_random_uuid(),1
+follows,hospitalization_id,uuid,YES,null,2
+follows,medication_name,text,NO,null,3
+follows,dosage,text,YES,null,4
+follows,route,text,YES,null,5
+follows,frequency,text,YES,null,6
+follows,scheduled_date,date,YES,null,7
+follows,scheduled_time,time without time zone,YES,null,8
+follows,status,text,YES,'scheduled'::text,9
+follows,completed_at,timestamp with time zone,YES,null,10
+follows,completion_notes,text,YES,null,11
+follows,created_at,timestamp with time zone,YES,now(),12
+follows,updated_at,timestamp with time zone,YES,now(),13
+hospitalization,id,uuid,NO,gen_random_uuid(),1
+hospitalization,patient_id,uuid,YES,null,2
+hospitalization,clinic_id,uuid,YES,null,3
+hospitalization,admission_date,date,NO,null,4
+hospitalization,discharge_date,date,YES,null,5
+hospitalization,status,text,NO,'active'::text,6
+hospitalization,priority,text,YES,'normal'::text,7
+hospitalization,room_number,text,YES,null,8
+hospitalization,bed_number,text,YES,null,9
+hospitalization,diagnosis,text,YES,null,10
+hospitalization,treatment_plan,text,YES,null,11
+hospitalization,special_instructions,text,YES,null,12
+hospitalization,assigned_vet,text,YES,null,13
+hospitalization,created_at,timestamp with time zone,YES,now(),14
+hospitalization,updated_at,timestamp with time zone,YES,now(),15
+medical_records,id,uuid,NO,gen_random_uuid(),1
+medical_records,patient_id,uuid,YES,null,2
+medical_records,clinic_id,uuid,YES,null,3
+medical_records,visit_date,date,NO,null,4
+medical_records,diagnosis,text,YES,null,5
+medical_records,treatment,text,YES,null,6
+medical_records,notes,text,YES,null,7
+medical_records,veterinarian,text,YES,null,8
+medical_records,created_at,timestamp with time zone,YES,now(),9
+medical_records,updated_at,timestamp with time zone,YES,now(),10
+notes,id,uuid,NO,gen_random_uuid(),1
+notes,hospitalization_id,uuid,YES,null,2
+notes,note_type,text,NO,null,3
+notes,content,text,NO,null,4
+notes,is_important,boolean,YES,false,5
+notes,created_by,text,YES,null,6
+notes,created_at,timestamp with time zone,YES,now(),7
+notes,updated_at,timestamp with time zone,YES,now(),8
+owners,id,uuid,NO,gen_random_uuid(),1
+owners,name,text,NO,null,2
+owners,phone,text,YES,null,3
+owners,email,text,YES,null,4
+owners,address,text,YES,null,5
+owners,clinic_id,uuid,YES,null,6
+owners,created_at,timestamp with time zone,YES,now(),7
+owners,updated_at,timestamp with time zone,YES,now(),8
+patients,id,uuid,NO,gen_random_uuid(),1
+patients,mrn,text,NO,null,2
+patients,name,text,NO,null,3
+patients,species_code,text,NO,null,4
+patients,breed_id,uuid,YES,null,5
+patients,breed,text,YES,null,6
+patients,sex,text,YES,null,7
+patients,birth_date,date,YES,null,8
+patients,weight_kg,numeric,YES,null,9
+patients,notes,text,YES,null,10
+patients,owner_id,uuid,YES,null,11
+patients,clinic_id,uuid,YES,null,12
+patients,history_number,text,YES,null,13
+patients,temper,text,YES,null,14
+patients,temperature,numeric,YES,null,15
+patients,respiration,integer,YES,null,16
+patients,pulse,integer,YES,null,17
+patients,hydration,text,YES,null,18
+patients,weight,text,YES,null,19
+patients,admission_date,date,YES,null,20
+patients,_patient_id,text,YES,null,21
+patients,created_at,timestamp with time zone,YES,now(),22
+patients,updated_at,timestamp with time zone,YES,now(),23
+treatments,id,uuid,NO,uuid_generate_v4(),1
+treatments,patient_id,uuid,YES,null,2
+treatments,hospitalization_id,uuid,YES,null,3
+treatments,clinic_id,uuid,YES,null,4
+treatments,medication_name,text,NO,null,5
+treatments,dosage,text,YES,null,6
+treatments,route,text,YES,null,7
+treatments,frequency,text,YES,null,8
+treatments,scheduled_date,date,NO,null,9
+treatments,scheduled_time,time without time zone,YES,null,10
+treatments,status,text,YES,'scheduled'::text,11
+treatments,completed_at,timestamp with time zone,YES,null,12
+treatments,completed_by,uuid,YES,null,13
+treatments,notes,text,YES,null,14
+treatments,created_by,uuid,YES,null,15
+treatments,created_at,timestamp with time zone,YES,now(),16
+treatments,updated_at,timestamp with time zone,YES,now(),17
+users,id,uuid,NO,gen_random_uuid(),1
+users,email,text,NO,null,2
+users,password_hash,text,YES,null,3
+users,full_name,text,NO,null,4
+users,is_admin,boolean,YES,false,5
+users,created_at,timestamp with time zone,YES,now(),6
+users,updated_at,timestamp with time zone,YES,now(),7

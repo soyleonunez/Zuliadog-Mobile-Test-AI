@@ -67,8 +67,8 @@ class HistoryService {
     }
   }
 
-  /// Obtiene todos los bloques de historia para un paciente usando MRN
-  Future<List<HistoryBlock>> getHistoryBlocks(String patientMrn,
+  /// Obtiene todos los bloques de historia para un paciente usando history_number
+  Future<List<HistoryBlock>> getHistoryBlocks(String patientHistoryNumber,
       {String? clinicId}) async {
     try {
       final clinicIdValue = clinicId ?? '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203';
@@ -78,7 +78,7 @@ class HistoryService {
           .from('medical_records')
           .select()
           .eq('clinic_id', clinicIdValue)
-          .eq('patient_id', patientMrn)
+          .eq('patient_id', patientHistoryNumber)
           .order('date', ascending: false)
           .order('created_at', ascending: false);
 
@@ -121,7 +121,7 @@ class HistoryService {
         author: row['created_by'] as String? ?? 'Veterinaria',
         createdAt: DateTime.parse(row['created_at'] as String),
         locked: row['locked'] as bool? ?? false,
-        deltaJson: row['content_delta'] as String? ?? '{"ops":[{"insert":""}]}',
+        deltaJson: row['notes'] as String? ?? '{"ops":[{"insert":""}]}',
         attachments: attachments,
         title: row['title'] as String?,
         summary: row['summary'] as String?,
@@ -134,7 +134,7 @@ class HistoryService {
 
   /// Crea un nuevo bloque de historia usando RPC
   Future<String> createHistoryBlock({
-    required String patientMrn,
+    required String patientHistoryNumber,
     required String author,
     String? title,
     String? summary,
@@ -148,7 +148,7 @@ class HistoryService {
       final result = await saveMedicalRecord(
         clinicId: clinicId ??
             '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203', // TODO: Obtener del contexto
-        patientMrn: patientMrn,
+        patientHistoryNumber: patientHistoryNumber,
         contentDelta: '{"ops":[{"insert":""}]}',
         title: title ?? 'Nueva historia médica',
         summary: summary,
@@ -314,7 +314,7 @@ class HistoryService {
   // MÉTODOS DE BÚSQUEDA DE PACIENTES
   // ========================================
 
-  /// Busca pacientes por nombre, MRN o dueño usando v_app
+  /// Busca pacientes por nombre, history_number o dueño usando v_app
   Future<List<PatientSearchRow>> searchPatients(String query,
       {int limit = 30}) async {
     try {
@@ -357,7 +357,7 @@ class HistoryService {
   /// Obtiene historias médicas de un paciente usando medical_records
   Future<List<Map<String, dynamic>>> fetchRecords({
     required String clinicId,
-    required String mrn,
+    required String historyNumber,
   }) async {
     try {
       // Consulta directa a medical_records
@@ -365,7 +365,7 @@ class HistoryService {
           .from('medical_records')
           .select('*')
           .eq('clinic_id', clinicId)
-          .eq('patient_id', mrn);
+          .eq('patient_id', historyNumber);
 
       final records = List<Map<String, dynamic>>.from(res as List);
 
@@ -382,8 +382,8 @@ class HistoryService {
     }
   }
 
-  /// Obtiene un paciente por MRN usando v_app
-  Future<PatientSummary?> getPatientSummary(String patientMrn) async {
+  /// Obtiene un paciente por history_number usando v_app
+  Future<PatientSummary?> getPatientSummary(String patientHistoryNumber) async {
     try {
       final clinicId =
           '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // TODO: Obtener del contexto
@@ -394,10 +394,11 @@ class HistoryService {
             _supa.from('v_app').select('*').eq('clinic_id', clinicId);
 
         // Si parece ser un UUID, buscar por patient_id, sino por history_number
-        if (patientMrn.contains('-')) {
-          queryBuilder = queryBuilder.eq('patient_id', patientMrn);
+        if (patientHistoryNumber.contains('-')) {
+          queryBuilder = queryBuilder.eq('patient_id', patientHistoryNumber);
         } else {
-          queryBuilder = queryBuilder.eq('history_number', patientMrn);
+          queryBuilder =
+              queryBuilder.eq('history_number', patientHistoryNumber);
         }
 
         final rows = await queryBuilder.limit(1);
@@ -417,12 +418,12 @@ class HistoryService {
 
   /// Actualiza información de un paciente
   Future<void> updatePatientInfo(
-      String patientMrn, Map<String, dynamic> patientData) async {
+      String patientHistoryNumber, Map<String, dynamic> patientData) async {
     try {
       final clinicId =
           '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // TODO: Obtener del contexto
       await DatabaseQueries.updatePatient(
-        patientMrn: patientMrn,
+        patientHistoryNumber: patientHistoryNumber,
         clinicId: clinicId,
         patientData: patientData,
       );
@@ -484,7 +485,7 @@ class HistoryService {
   /// Guarda un record médico completo con paciente y adjuntos en una sola transacción
   Future<Map<String, dynamic>> saveMedicalRecord({
     required String clinicId,
-    required String patientMrn,
+    required String patientHistoryNumber,
     required String contentDelta,
     String? title,
     String? summary,
@@ -499,7 +500,7 @@ class HistoryService {
       // Usar el snippet optimizado para guardar historia + patch + adjuntos
       final result = await saveMedicalRecordSnippet(
         clinicId: clinicId,
-        mrn: patientMrn,
+        historyNumber: patientHistoryNumber,
         contentDelta: contentDelta,
         departmentCode: departmentCode ?? 'MED',
         locked: locked,
@@ -526,7 +527,7 @@ class HistoryService {
   }) async {
     try {
       final updateData = <String, dynamic>{
-        'content_delta': contentDelta,
+        'notes': contentDelta,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
@@ -615,7 +616,7 @@ class HistoryService {
   /// Guardar historia + patch + adjuntos (RPC)
   Future<Map<String, dynamic>> saveMedicalRecordSnippet({
     required String clinicId,
-    required String mrn,
+    required String historyNumber,
     required String contentDelta,
     String departmentCode = 'MED',
     bool locked = false,
@@ -626,11 +627,11 @@ class HistoryService {
     final payload = {
       'record': {
         'clinic_id': clinicId,
-        'patient_id': mrn,
+        'patient_id': historyNumber,
         'date': date?.toIso8601String().substring(0, 10),
         'department_code': departmentCode,
         'locked': locked,
-        'content_delta': contentDelta,
+        'notes': contentDelta,
       },
       if (patientPatch != null) 'patient_patch': patientPatch,
       if (attachments.isNotEmpty) 'attachments': attachments,
@@ -643,14 +644,14 @@ class HistoryService {
   /// Crear receta + items (RPC, opcional)
   Future<Map<String, dynamic>> createPrescription({
     required String clinicId,
-    required String mrn,
+    required String historyNumber,
     String? notes,
     List<Map<String, String>> items = const [],
   }) async {
     final res = await _supa.rpc('create_prescription', params: {
       'payload': {
         'clinic_id': clinicId,
-        'mrn': mrn,
+        'historyNumber': historyNumber,
         if (notes != null) 'notes': notes,
         if (items.isNotEmpty) 'items': items,
       }
@@ -659,9 +660,10 @@ class HistoryService {
   }
 
   /// Obtiene la URL pública de un archivo usando la convención de Storage
-  String getPublicUrlForRecord(String mrn, String recordId, String fileName) {
-    // Convención: records/<MRN>/<RECORD_ID>/<archivo.ext>
-    final filePath = 'records/$mrn/$recordId/$fileName';
+  String getPublicUrlForRecord(
+      String historyNumber, String recordId, String fileName) {
+    // Convención: records/<historyNumber>/<RECORD_ID>/<archivo.ext>
+    final filePath = 'records/$historyNumber/$recordId/$fileName';
     return _supa.storage.from('medical_records').getPublicUrl(filePath);
   }
 
@@ -688,7 +690,7 @@ class HistoryService {
   Future<Map<String, dynamic>> addPrescriptionAttachment({
     required String clinicId,
     String? recordId,
-    String? mrn,
+    String? historyNumber,
     required String storagePath,
     Map<String, dynamic>? meta,
   }) async {
@@ -697,7 +699,7 @@ class HistoryService {
         'clinic_id': clinicId,
         'path': storagePath,
         if (recordId != null) 'record_id': recordId,
-        if (mrn != null) 'mrn': mrn,
+        if (historyNumber != null) 'historyNumber': historyNumber,
         'label': 'Receta',
         if (meta != null) 'meta': meta,
       };
@@ -714,7 +716,7 @@ class HistoryService {
   /// Método completo para subir PDF de receta y registrarlo
   Future<Map<String, dynamic>> uploadAndRegisterPrescription({
     required String clinicId,
-    required String mrn,
+    required String historyNumber,
     required File pdfFile,
     String? recordId,
     Map<String, dynamic>? meta,
@@ -723,8 +725,8 @@ class HistoryService {
       // 1. Generar ruta de storage con convención
       final fileName = 'receta_${DateTime.now().millisecondsSinceEpoch}.pdf';
       final storagePath = recordId != null
-          ? 'records/$mrn/$recordId/$fileName'
-          : 'records/$mrn/tmp/$fileName';
+          ? 'records/$historyNumber/$recordId/$fileName'
+          : 'records/$historyNumber/tmp/$fileName';
 
       // 2. Subir archivo a Storage
       await uploadPrescriptionPdf(
@@ -737,7 +739,7 @@ class HistoryService {
       final result = await addPrescriptionAttachment(
         clinicId: clinicId,
         recordId: recordId,
-        mrn: mrn,
+        historyNumber: historyNumber,
         storagePath: storagePath,
         meta: meta ??
             {
@@ -755,10 +757,10 @@ class HistoryService {
     }
   }
 
-  /// Obtiene solo recetas de un paciente por MRN
-  Future<List<Map<String, dynamic>>> getPrescriptionsByMrn({
+  /// Obtiene solo recetas de un paciente por history_number
+  Future<List<Map<String, dynamic>>> getPrescriptionsByHistoryNumber({
     required String clinicId,
-    required String mrn,
+    required String historyNumber,
   }) async {
     try {
       final rows = await _supa
@@ -772,7 +774,7 @@ class HistoryService {
             )
           ''')
           .eq('medical_records.clinic_id', clinicId)
-          .eq('medical_records.patient_id', mrn)
+          .eq('medical_records.patient_id', historyNumber)
           .or('meta->>type.eq.prescription,label.ilike.Receta%')
           .order('created_at', ascending: false);
 
@@ -925,7 +927,7 @@ class PatientSearchRow {
           '',
       ownerName: json['owner_name']?.toString() ??
           json['owner_name_snapshot']?.toString(),
-      species: _getSpeciesLabel(json['patient_species_code']),
+      species: _getSpeciesLabel(json['species_code']),
       breed: json['breed_label']?.toString() ?? json['breed']?.toString(),
       breedId: json['breed_id']?.toString(),
       ownerPhone: json['owner_phone']?.toString(),
@@ -1006,6 +1008,9 @@ Future<void> debugAllRecords() async {
     final _supa = Supabase.instance.client;
     final allRecords = await _supa.from('medical_records').select('*');
 
-    for (var record in allRecords) {}
+    for (var record in allRecords) {
+      // TODO: Process record if needed
+      print('Record: $record'); // Temporary fix for linter warning
+    }
   } catch (e) {}
 }

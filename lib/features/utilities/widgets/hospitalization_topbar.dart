@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../home.dart' as home;
 
-enum HospitalizationView { patients, gantt, calendar, reports }
+enum HospitalizationView { patients, gantt, reports }
 
 class HospitalizationTopBar extends StatelessWidget {
   final HospitalizationView currentView;
@@ -75,13 +75,6 @@ class HospitalizationTopBar extends StatelessWidget {
                     'Tratamientos', // Cambiado de 'Gantt' a 'Tratamientos' para que sea más claro
                 view: HospitalizationView.gantt,
                 isSelected: currentView == HospitalizationView.gantt,
-              ),
-              const SizedBox(width: 8),
-              _buildViewButton(
-                icon: Iconsax.calendar_2,
-                label: 'Calendario',
-                view: HospitalizationView.calendar,
-                isSelected: currentView == HospitalizationView.calendar,
               ),
               const SizedBox(width: 8),
               _buildViewButton(

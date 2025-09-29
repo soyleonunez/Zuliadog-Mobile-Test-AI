@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:zuliadog/features/home.dart';
-import 'department_login.dart';
-import 'tutorial_screen.dart';
+import 'package:zuliadog/features/auth/tutorial_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -45,14 +44,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.dispose();
   }
 
-  void _goToLogin(BuildContext context) async {
+  void _goToHome(BuildContext context) async {
     if (mounted) {
       Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const DepartmentLoginScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
+        MaterialPageRoute(
+          builder: (_) => const HomeScreen(),
         ),
       );
     }
@@ -151,12 +147,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             color: Colors.transparent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(20),
-                              onTap: () => _goToLogin(context),
+                              onTap: () => _goToHome(context),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    'Ingresar',
+                                    'Entrar',
                                     style: t.titleMedium?.copyWith(
                                       fontWeight: FontWeight.w600,
                                       color: Colors.white, // TEXTO BLANCO

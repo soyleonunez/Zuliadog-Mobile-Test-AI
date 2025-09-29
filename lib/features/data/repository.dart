@@ -403,45 +403,88 @@ class DataRepository {
       {int limit = 30}) async {
     final q = query.trim();
 
-    final baseSel = _db.from('v_app').select('*');
+    var baseSel = _db.from('patients').select('''
+          id,
+          history_number,
+          name,
+          species_code,
+          breed_id,
+          breed,
+          sex,
+          birth_date,
+          weight_kg,
+          notes,
+          owner_id,
+          clinic_id,
+          history_number,
+          temper,
+          temperature,
+          respiration,
+          pulse,
+          hydration,
+          weight,
+          admission_date,
+          _patient_id,
+          created_at,
+          updated_at,
+          owners:owner_id (
+            name,
+            phone,
+            email
+          ),
+          breeds:breed_id (
+            label,
+            species_code,
+            species_label
+          )
+        ''');
 
     if (q.isEmpty) {
       // Lista inicial: algunos pacientes ordenados por nombre
-      final rows =
-          await baseSel.order('patient_name', ascending: true).limit(limit);
-
-      // Agrupar por patient_id para evitar duplicados
-      final Map<String, Map<String, dynamic>> uniquePatients = {};
-      for (final record in rows) {
-        final patientId = record['patient_id'] ?? record['patient_uuid'];
-        if (patientId != null && !uniquePatients.containsKey(patientId)) {
-          uniquePatients[patientId] = record;
-        }
-      }
-
-      return uniquePatients.values
-          .map((e) => PatientSearchRow.fromJson(e))
-          .toList();
+      final rows = await baseSel.order('name', ascending: true).limit(limit);
+      return _processSearchResults(rows);
     }
 
     // Usar la misma lógica simple que funciona en pacientes.dart
     final rows = await baseSel
-        .or('patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%')
-        .order('patient_name', ascending: true)
+        .or('name.ilike.%$q%,history_number.ilike.%$q%')
+        .order('name', ascending: true)
         .limit(limit);
 
-    // Agrupar por patient_id para evitar duplicados
-    final Map<String, Map<String, dynamic>> uniquePatients = {};
-    for (final record in rows) {
-      final patientId = record['patient_id'] ?? record['patient_uuid'];
-      if (patientId != null && !uniquePatients.containsKey(patientId)) {
-        uniquePatients[patientId] = record;
-      }
-    }
+    return _processSearchResults(rows);
+  }
 
-    return uniquePatients.values
-        .map((e) => PatientSearchRow.fromJson(e))
-        .toList();
+  /// Procesa los resultados de búsqueda y los convierte al formato esperado
+  List<PatientSearchRow> _processSearchResults(List<dynamic> rows) {
+    return rows.map((record) {
+      final owner = record['owners'] as Map<String, dynamic>?;
+      final breed = record['breeds'] as Map<String, dynamic>?;
+
+      final processedRecord = {
+        'patient_id': record['id'],
+        'patient_uuid': record['id'],
+        'clinic_id': record['clinic_id'],
+        'patient_name': record['name'],
+        'paciente_name_snapshot': record['name'],
+        'history_number': record['history_number'],
+        'history_number_snapshot': record['history_number'],
+        'history_number_int': record['history_number'],
+        'owner_name': owner?['name'],
+        'owner_name_snapshot': owner?['name'],
+        'owner_phone': owner?['phone'],
+        'owner_email': owner?['email'],
+        'species_code': record['species_code'],
+        'breed_label': breed?['label'],
+        'breed': breed?['label'],
+        'breed_id': record['breed_id'],
+        'sex': record['sex'],
+        'status': 'active',
+        'last_visit_at': record['created_at'],
+        'photo_path': null,
+      };
+
+      return PatientSearchRow.fromJson(processedRecord);
+    }).toList();
   }
 
   /// Obtiene estadísticas del dashboard

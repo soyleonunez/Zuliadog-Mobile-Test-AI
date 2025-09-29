@@ -45,10 +45,10 @@ class TextEditor extends StatefulWidget {
     this.showAttachments = false,
     this.showLockToggle = true,
     this.showDeleteButton = true,
-    this.titleField = 'title',
-    this.summaryField = 'summary',
-    this.contentField = 'content_delta',
-    this.dateField = 'date',
+    this.titleField = 'diagnosis', // Del CSV: diagnosis
+    this.summaryField = 'summary', // Existe en BD
+    this.contentField = 'notes', // Del CSV: notes
+    this.dateField = 'visit_date', // Del CSV: visit_date
     this.authorField = 'created_by',
     this.departmentField = 'department_code',
     this.lockedField = 'locked',
@@ -74,20 +74,14 @@ class _TextEditorState extends State<TextEditor> {
   void initState() {
     super.initState();
     _initializeControllers();
-    // Estado inicial: bloqueado por defecto, a menos que el campo locked sea explícitamente false
-    _isLocked = widget.data[widget.lockedField] != false;
+    // Estado inicial: no bloqueado por defecto si el campo locked no existe o es false
+    _isLocked = widget.data[widget.lockedField] == true;
     // Si es un bloque nuevo, empezar en modo edición
     _isEditing = widget.data['is_new'] == true;
     _loadAttachedFiles(); // Cargar archivos adjuntos existentes
   }
 
   void _initializeControllers() {
-    // Debug: verificar si es un bloque nuevo
-    print(
-        '🔍 TextEditor - is_new: ${widget.data['is_new']} (type: ${widget.data['is_new'].runtimeType})');
-    print('🔍 TextEditor - data keys: ${widget.data.keys.toList()}');
-    
-
     // Inicializar controlador para summary usando DataService
     final summaryDelta = widget.data['is_new'] == true
         ? [
@@ -99,7 +93,7 @@ class _TextEditorState extends State<TextEditor> {
       selection: const TextSelection.collapsed(offset: 0),
     );
 
-    // Inicializar controlador para content_delta usando DataService
+    // Inicializar controlador para notes usando DataService
     final contentDelta = widget.data['is_new'] == true
         ? [
             {'insert': 'Escribe las acotaciones adicionales...\n'}
@@ -116,13 +110,11 @@ class _TextEditorState extends State<TextEditor> {
             ? 'Escribe el título de la consulta...'
             : '');
     _titleController = TextEditingController(text: titleText);
-    
 
     // Inicializar controlador para médico
-    final doctorText = widget.data['doctor']?.toString() ??
+    final doctorText = widget.data['veterinarian']?.toString() ??
         (widget.data['is_new'] == true ? 'Nombre del médico...' : '');
     _doctorController = TextEditingController(text: doctorText);
-    
   }
 
   @override
@@ -177,15 +169,15 @@ class _TextEditorState extends State<TextEditor> {
 
   Future<void> _updateLockStatus(bool locked) async {
     try {
-      await _supa
-          .from(widget.tableName)
-          .update({'locked': locked.toString()}).eq('id', widget.recordId);
+      // Solo actualizar si la tabla tiene el campo locked
+      if (widget.lockedField != null) {
+        await _supa.from(widget.tableName).update(
+            {widget.lockedField!: locked.toString()}).eq('id', widget.recordId);
 
-      // Actualizar el widget.data también
-      widget.data['locked'] = locked;
-    } catch (e) {
-      
-    }
+        // Actualizar el widget.data también
+        widget.data[widget.lockedField!] = locked;
+      }
+    } catch (e) {}
   }
 
   void _cancelEditing() {
@@ -196,7 +188,7 @@ class _TextEditorState extends State<TextEditor> {
           (widget.data['is_new'] == true
               ? 'Escribe el título de la consulta...'
               : '');
-      _doctorController.text = widget.data['doctor']?.toString() ??
+      _doctorController.text = widget.data['veterinarian']?.toString() ??
           (widget.data['is_new'] == true ? 'Nombre del médico...' : '');
       _initializeControllers();
       _selectedFiles.clear(); // Limpiar archivos seleccionados
@@ -265,7 +257,6 @@ class _TextEditorState extends State<TextEditor> {
         _isLoadingAttachments = false;
       });
     } catch (e) {
-      
       setState(() {
         _isLoadingAttachments = false;
       });
@@ -305,7 +296,6 @@ class _TextEditorState extends State<TextEditor> {
         try {
           // Verificar que el archivo tenga bytes
           if (file.bytes == null) {
-            
             continue;
           }
 
@@ -330,9 +320,7 @@ class _TextEditorState extends State<TextEditor> {
             'file_type': file.extension,
             'uploaded_at': DateTime.now().toIso8601String(),
           });
-        } catch (e) {
-          
-        }
+        } catch (e) {}
       }
 
       // Recargar archivos adjuntos
@@ -457,7 +445,7 @@ class _TextEditorState extends State<TextEditor> {
             cleanTitle.isEmpty || cleanTitle.contains('Escribe el título')
                 ? null
                 : cleanTitle,
-        'doctor':
+        'veterinarian':
             cleanDoctor.isEmpty || cleanDoctor.contains('Nombre del médico')
                 ? null
                 : cleanDoctor,
@@ -477,16 +465,16 @@ class _TextEditorState extends State<TextEditor> {
 
       // Verificar si es un bloque nuevo (ID temporal)
       final isNewBlock = widget.recordId.startsWith('temp_');
-      
-      
-      
 
       if (isNewBlock) {
         // Es un bloque nuevo, crear en la base de datos
         saveData['patient_id'] = widget.data['patient_id'];
-        saveData['date'] = widget.data['date'];
+        saveData['visit_date'] = widget.data['visit_date'];
         saveData['department_code'] = widget.data['department_code'] ?? 'MED';
-        saveData['locked'] = (widget.data['locked'] == true).toString();
+        if (widget.lockedField != null) {
+          saveData[widget.lockedField!] =
+              (widget.data[widget.lockedField!] == true).toString();
+        }
         // Asegurar que created_at sea un string en formato ISO
         final createdAt = widget.data['created_at'];
         if (createdAt is DateTime) {
@@ -498,27 +486,20 @@ class _TextEditorState extends State<TextEditor> {
         }
 
         // Asegurar que los campos de texto sean strings o null
-        if (saveData['title'] != null &&
-            saveData['title'].toString().trim().isEmpty) {
-          saveData['title'] = null;
+        if (saveData['diagnosis'] != null &&
+            saveData['diagnosis'].toString().trim().isEmpty) {
+          saveData['diagnosis'] = null;
         }
-        if (saveData['doctor'] != null &&
-            saveData['doctor'].toString().trim().isEmpty) {
-          saveData['doctor'] = null;
-        }
-        if (saveData['summary'] != null &&
-            saveData['summary'].toString().trim().isEmpty) {
-          saveData['summary'] = null;
+        if (saveData['veterinarian'] != null &&
+            saveData['veterinarian'].toString().trim().isEmpty) {
+          saveData['veterinarian'] = null;
         }
 
         // Debug: verificar tipos de datos
-        
-        saveData.forEach((key, value) {
-          
-        });
 
-        print(
-            '🔍 _save - insertando en ${widget.tableName} con datos: $saveData');
+        saveData.forEach((key, value) {});
+
+        // Insertando datos
 
         final response = await _supa
             .from(widget.tableName)
@@ -526,19 +507,17 @@ class _TextEditorState extends State<TextEditor> {
             .select('id')
             .single();
 
-        
-
         // Actualizar el ID temporal con el ID real de la base de datos
         widget.data['id'] = response['id'];
         widget.data.remove('is_new'); // Remover la marca de nuevo
         widget.data.remove('is_temp'); // Remover la marca de temporal
-
-        
       } else {
         // Es un bloque existente, actualizar
         // Asegurar que locked sea string para actualizaciones también
-        if (saveData.containsKey('locked')) {
-          saveData['locked'] = (saveData['locked'] == true).toString();
+        if (widget.lockedField != null &&
+            saveData.containsKey(widget.lockedField!)) {
+          saveData[widget.lockedField!] =
+              (saveData[widget.lockedField!] == true).toString();
         }
 
         await _supa
@@ -559,7 +538,6 @@ class _TextEditorState extends State<TextEditor> {
         }
       }
     } catch (e) {
-      
       if (mounted) {
         NotificationService.showError('Error al guardar la historia: $e');
       }
@@ -655,7 +633,10 @@ class _TextEditorState extends State<TextEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final date = widget.data[widget.dateField]?.toString() ?? '';
+    // Usar visit_date si date no existe
+    final date = widget.data[widget.dateField]?.toString() ??
+        widget.data['visit_date']?.toString() ??
+        '';
     final dateFormat =
         widget.dateFormat ?? DateFormat('d MMMM y, hh:mm a', 'es');
 

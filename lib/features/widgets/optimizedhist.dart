@@ -9,7 +9,7 @@ import 'package:zuliadog/core/notifications.dart';
 import 'package:zuliadog/core/pdf_service.dart';
 import 'package:zuliadog/features/data/data_service.dart';
 import 'package:zuliadog/features/widgets/text_editor.dart';
-import 'package:zuliadog/features/widgets/new_patient_form.dart';
+import 'package:zuliadog/features/widgets/patient_form.dart';
 
 final _supa = Supabase.instance.client;
 
@@ -17,9 +17,13 @@ final _supa = Supabase.instance.client;
 /// Diseño de 2 columnas: historias médicas + ficha del paciente
 class OptimizedHistoriasPage extends StatefulWidget {
   final String clinicId; // Oculto en UI
-  final String? mrn; // MRN de 6 dígitos (opcional)
+  final String? historyNumber; // history_number de 6 dígitos (opcional)
 
-  const OptimizedHistoriasPage({super.key, required this.clinicId, this.mrn});
+  const OptimizedHistoriasPage({
+    super.key,
+    required this.clinicId,
+    this.historyNumber,
+  });
 
   @override
   State<OptimizedHistoriasPage> createState() => _OptimizedHistoriasPageState();
@@ -30,7 +34,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   late Future<Map<String, dynamic>?> _patientFuture;
   final _df = DateFormat('d MMMM y, hh:mm a', 'es');
   final _searchController = TextEditingController();
-  String? _currentMrn;
+  String? _currentHistoryNumber;
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
   String? _clinicId;
@@ -42,16 +46,16 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   @override
   void initState() {
     super.initState();
-    _currentMrn = widget.mrn;
+    _currentHistoryNumber = widget.historyNumber;
     _loadClinicId();
   }
 
   @override
   void didUpdateWidget(OptimizedHistoriasPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.mrn != oldWidget.mrn) {
-      _currentMrn = widget.mrn;
-      _loadData(); // Reload data when mrn changes
+    if (widget.historyNumber != oldWidget.historyNumber) {
+      _currentHistoryNumber = widget.historyNumber;
+      _loadData(); // Reload data when historyNumber changes
     }
   }
 
@@ -66,7 +70,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }
 
   void _loadData() {
-    if (_currentMrn != null && _clinicId != null) {
+    if (_currentHistoryNumber != null && _clinicId != null) {
       _future = _fetchHistories();
       _patientFuture = _fetchPatient();
     } else {
@@ -77,7 +81,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchHistories() async {
-    if (_currentMrn == null || _clinicId == null) return [];
+    if (_currentHistoryNumber == null || _clinicId == null) return [];
 
     setState(() {
       _isLoadingHistories = true;
@@ -86,12 +90,23 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     try {
       // Consultar medical_records con RLS
 
+      // Primero obtener el UUID del paciente por history_number
+      final patientResult = await _supa
+          .from('patients')
+          .select('id')
+          .eq('clinic_id', _clinicId!)
+          .eq('history_number', _currentHistoryNumber!)
+          .single();
+
+      final patientId = patientResult['id'] as String;
+
+      // Luego buscar los registros médicos por el UUID del paciente
       final rows = await _supa
           .from('medical_records')
           .select('*')
           .eq('clinic_id', _clinicId!)
-          .eq('patient_id', _currentMrn!)
-          .order('date', ascending: false)
+          .eq('patient_id', patientId)
+          .order('visit_date', ascending: false)
           .order('created_at', ascending: false);
 
       // Los datos ya están en el formato correcto de medical_records
@@ -100,7 +115,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       setState(() {
         _cachedHistories = [
           ...histories,
-          ..._cachedHistories.where((h) => h['is_temp'] == true).toList()
+          ..._cachedHistories.where((h) => h['is_temp'] == true).toList(),
         ];
         _isLoadingHistories = false;
       });
@@ -115,7 +130,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }
 
   Future<Map<String, dynamic>?> _fetchPatient() async {
-    if (_currentMrn == null || _clinicId == null) {
+    if (_currentHistoryNumber == null || _clinicId == null) {
       return null;
     }
 
@@ -125,7 +140,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
           .from('v_app')
           .select('*')
           .eq('clinic_id', _clinicId!)
-          .eq('history_number', _currentMrn!)
+          .eq('history_number', _currentHistoryNumber!)
           .limit(1);
 
       if (rows.isNotEmpty) {
@@ -214,7 +229,9 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
           .from('v_app')
           .select('*')
           .eq('clinic_id', _clinicId!)
-          .or('patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%')
+          .or(
+            'patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%',
+          )
           .limit(10);
 
       // Agrupar por patient_id para evitar duplicados
@@ -243,7 +260,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 
   Future<void> _createNewBlock() async {
     // Verificar que hay un paciente seleccionado
-    if (_currentMrn == null || _clinicId == null) {
+    if (_currentHistoryNumber == null || _clinicId == null) {
       NotificationService.showWarning('Primero selecciona un paciente');
       return;
     }
@@ -254,7 +271,8 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       final newBlock = {
         'id': 'temp_${now.millisecondsSinceEpoch}', // ID temporal
         'clinic_id': _clinicId!,
-        'patient_id': _currentMrn!, // En medical_records, patient_id es el MRN
+        'patient_id':
+            _currentHistoryNumber!, // En medical_records, patient_id es el history_number
         'date': now.toIso8601String().substring(0, 10), // Solo fecha, no hora
         'title': null,
         'summary': null,
@@ -263,7 +281,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         'locked': false,
         'created_by': null,
         'created_at': now.toIso8601String(),
-        'content_delta': null,
+        'notes': null,
         'is_new': true, // Marcar como nuevo para identificar
         'is_temp': true, // Marcar como temporal para no duplicar
       };
@@ -274,7 +292,8 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       });
 
       NotificationService.showSuccess(
-          'Nuevo bloque creado. Puedes editarlo ahora.');
+        'Nuevo bloque creado. Puedes editarlo ahora.',
+      );
     } catch (e) {
       if (mounted) {
         NotificationService.showError('Error al crear bloque: $e');
@@ -284,7 +303,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 
   void _openHistoryEditor({Map<String, dynamic>? record}) {
     // Verificar que hay un paciente seleccionado
-    if (_currentMrn == null) {
+    if (_currentHistoryNumber == null) {
       NotificationService.showWarning('Primero selecciona un paciente');
       return;
     }
@@ -297,7 +316,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         backgroundColor: Colors.white,
         builder: (BuildContext context) => _HistoryEditor(
           clinicId: _clinicId!,
-          mrn: _currentMrn!,
+          historyNumber: _currentHistoryNumber!,
           record: record,
         ),
       ).then((saved) {
@@ -306,7 +325,8 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
             _future = _fetchHistories();
           });
           NotificationService.showSuccess(
-              'Bloque de historia creado correctamente');
+            'Bloque de historia creado correctamente',
+          );
         }
       }).catchError((error) {
         if (mounted) {
@@ -318,13 +338,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         NotificationService.showError('Error al abrir el editor: $e');
       }
     }
-  }
-
-  void _createLitter() {
-    // TODO: Implementar creación de camada
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Crear Camada (pendiente)')),
-    );
   }
 
   void _exportHistory() {
@@ -343,8 +356,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     // Abrir formulario de nuevo paciente
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => NewPatientForm(
-          clinicId: _clinicId ?? '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203',
+        builder: (context) => ModernPatientForm(
           onPatientCreated: () {
             // Callback cuando se crea un paciente exitosamente
             Navigator.of(context).pop();
@@ -362,7 +374,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }
 
   Future<void> _exportToPDF() async {
-    if (_currentMrn == null) {
+    if (_currentHistoryNumber == null) {
       NotificationService.showWarning('Primero selecciona un paciente');
       return;
     }
@@ -375,7 +387,8 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       final patient = await _patientFuture;
       if (patient == null) {
         NotificationService.showError(
-            'No se pudo obtener información del paciente');
+          'No se pudo obtener información del paciente',
+        );
         return;
       }
 
@@ -394,6 +407,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         clinicName: clinicName,
         clinicAddress: clinicAddress,
         clinicPhone: clinicPhone,
+        clinicEmail: 'contacto@zuliadog.com', // Email de la clínica
       );
 
       NotificationService.showSuccess('PDF generado correctamente');
@@ -418,8 +432,10 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
           children: [
             const Icon(Iconsax.note_2, size: 64, color: AppTheme.neutral500),
             const SizedBox(height: 16),
-            const Text('Sin historias aún',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            const Text(
+              'Sin historias aún',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             const Text('Crea la primera historia médica para este paciente'),
             const SizedBox(height: 24),
@@ -430,10 +446,13 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary500,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ],
@@ -492,10 +511,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         children: [
           Text(
             '$label: ',
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF6B7280),
-            ),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
           ),
           Text(
             value,
@@ -519,10 +535,10 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     final name = patient['patient_name'] ??
         patient['paciente_name_snapshot'] ??
         'Sin nombre';
-    final species = _getSpeciesLabel(patient['patient_species_code']);
+    final species = _getSpeciesLabel(patient['species_code']);
     final breed =
         patient['breed_label'] ?? patient['breed'] ?? 'Sin especificar';
-    final mrn = patient['history_number'] ??
+    final historyNumber = patient['history_number'] ??
         patient['history_number_snapshot'] ??
         'N/A';
     final ownerName = patient['owner_name'] ??
@@ -532,7 +548,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     return InkWell(
       onTap: () {
         setState(() {
-          _currentMrn = mrn;
+          _currentHistoryNumber = historyNumber;
           _searchResults = [];
           _searchController.clear();
           _loadData();
@@ -588,7 +604,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
               ),
             ),
             Text(
-              'MRN: $mrn',
+              'Historia: $historyNumber',
               style: const TextStyle(
                 fontSize: 12,
                 color: AppTheme.neutral500,
@@ -612,15 +628,9 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
           child: Row(
             children: [
               // Columna izquierda: Historias Médicas (70%)
-              Expanded(
-                flex: 7,
-                child: _buildHistoriesColumn(),
-              ),
+              Expanded(flex: 7, child: _buildHistoriesColumn()),
               // Columna derecha: Ficha del Paciente (30%)
-              Expanded(
-                flex: 3,
-                child: _buildPatientPanel(),
-              ),
+              Expanded(flex: 3, child: _buildPatientPanel()),
             ],
           ),
         ),
@@ -633,9 +643,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
       ),
       child: Row(
         children: [
@@ -662,7 +670,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                 controller: _searchController,
                 onChanged: _searchPatients,
                 decoration: InputDecoration(
-                  hintText: 'Buscar por MRN o nombre de mascota...',
+                  hintText: 'Buscar por historia o nombre de mascota...',
                   hintStyle: const TextStyle(
                     color: Color(0xFF6B7280),
                     fontSize: 14,
@@ -676,7 +684,8 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF4F46E5)),
+                                Color(0xFF4F46E5),
+                              ),
                             ),
                           ),
                         )
@@ -685,7 +694,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                           color: Color(0xFF6B7280),
                           size: 18,
                         ),
-                  suffixIcon: _currentMrn != null
+                  suffixIcon: _currentHistoryNumber != null
                       ? IconButton(
                           onPressed: () => _exportHistory(),
                           icon: const Icon(
@@ -696,8 +705,10 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                         )
                       : null,
                   border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
               ),
             ),
@@ -709,7 +720,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
             icon: Iconsax.add_square,
             tooltip: 'Nuevo Bloque',
             color: const Color(0xFF16A34A),
-            onTap: _currentMrn == null
+            onTap: _currentHistoryNumber == null
                 ? null
                 : () {
                     _createNewBlock();
@@ -731,7 +742,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
             text: 'Exportar PDF',
             tooltip: 'Exportar Historia a PDF',
             color: const Color(0xFFDC2626),
-            onTap: _currentMrn == null ? null : () => _exportToPDF(),
+            onTap: _currentHistoryNumber == null ? null : () => _exportToPDF(),
           ),
         ],
       ),
@@ -799,21 +810,14 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
       child: _AnimatedButton(
         onTap: onTap,
         child: Container(
-          width: 32,
-          height: 32,
+          width: 24,
+          height: 24,
           decoration: BoxDecoration(
             color: color.withValues(alpha: .1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: color.withValues(alpha: .3),
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: .3), width: 1),
           ),
-          child: Icon(
-            icon,
-            size: 16,
-            color: color,
-          ),
+          child: Icon(icon, size: 12, color: color),
         ),
       ),
     );
@@ -854,8 +858,11 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Iconsax.search_normal_1,
-                            color: Color(0xFF4F46E5), size: 16),
+                        const Icon(
+                          Iconsax.search_normal_1,
+                          color: Color(0xFF4F46E5),
+                          size: 16,
+                        ),
                         const SizedBox(width: 8),
                         const Text(
                           'Resultados de búsqueda',
@@ -884,27 +891,29 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
             ),
           // Lista de historias o mensaje de selección
           Expanded(
-            child: _currentMrn == null
+            child: _currentHistoryNumber == null
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Iconsax.user_search,
-                            size: 64, color: Color(0xFF6B7280)),
+                        const Icon(
+                          Iconsax.user_search,
+                          size: 64,
+                          color: Color(0xFF6B7280),
+                        ),
                         const SizedBox(height: 16),
                         const Text(
                           'Selecciona un paciente',
                           style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1F2937)),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F2937),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         const Text(
                           'Para ver sus historias médicas',
-                          style: TextStyle(
-                            color: Color(0xFF6B7280),
-                          ),
+                          style: TextStyle(color: Color(0xFF6B7280)),
                         ),
                       ],
                     ),
@@ -942,13 +951,16 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         children: [
           // Contenido del panel
           Expanded(
-            child: _currentMrn == null
+            child: _currentHistoryNumber == null
                 ? const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Iconsax.user_search,
-                            size: 48, color: AppTheme.neutral500),
+                        Icon(
+                          Iconsax.user_search,
+                          size: 48,
+                          color: AppTheme.neutral500,
+                        ),
                         SizedBox(height: 16),
                         Text('Ficha del Paciente'),
                       ],
@@ -962,11 +974,13 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                       }
                       if (snap.hasError) {
                         return const Center(
-                            child: Text('Error al cargar paciente'));
+                          child: Text('Error al cargar paciente'),
+                        );
                       }
                       if (snap.data == null) {
                         return const Center(
-                            child: Text('Paciente no encontrado'));
+                          child: Text('Paciente no encontrado'),
+                        );
                       }
                       final patient = snap.data!;
                       return SingleChildScrollView(
@@ -991,8 +1005,9 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             border: Border.all(
-                                                color: const Color(0xFF4F46E5),
-                                                width: 2),
+                                              color: const Color(0xFF4F46E5),
+                                              width: 2,
+                                            ),
                                           ),
                                           child: ClipOval(
                                             child: DataService()
@@ -1039,18 +1054,10 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                                       tooltip:
                                                           'Editar Paciente',
                                                       color: const Color(
-                                                          0xFF3B82F6),
+                                                        0xFF3B82F6,
+                                                      ),
                                                       onTap: () =>
                                                           _navigateToPatients(),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    // Botón Camada
-                                                    _buildSmallActionButton(
-                                                      icon: Iconsax.pet,
-                                                      tooltip: 'Crear Camada',
-                                                      color: Colors.orange,
-                                                      onTap: () =>
-                                                          _createLitter(),
                                                     ),
                                                   ],
                                                 ),
@@ -1058,7 +1065,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              'MRN: ${patient['history_number']?.toString().padLeft(6, '0') ?? _currentMrn!.padLeft(6, '0')}',
+                                              'Historia: ${patient['history_number']?.toString().padLeft(6, '0') ?? _currentHistoryNumber!.padLeft(6, '0')}',
                                               style: const TextStyle(
                                                 fontSize: 14,
                                                 color: Color(0xFF6B7280),
@@ -1072,21 +1079,28 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                   const SizedBox(height: 16),
                                   // Información básica en dos filas
                                   _buildPatientInfoRow(
-                                      'Especie',
-                                      patient['species_label'] ??
-                                          'No especificada'),
+                                    'Especie',
+                                    patient['species_label'] ??
+                                        'No especificada',
+                                  ),
                                   _buildPatientInfoRow(
-                                      'Raza',
-                                      patient['breed_label'] ??
-                                          'No especificada'),
-                                  _buildPatientInfoRow('Sexo',
-                                      patient['sex'] ?? 'No especificado'),
-                                  _buildPatientInfoRow('Temperamento',
-                                      patient['temper'] ?? 'No especificado'),
+                                    'Raza',
+                                    patient['breed_label'] ?? 'No especificada',
+                                  ),
                                   _buildPatientInfoRow(
-                                      'Edad',
-                                      _calculateAge(
-                                          patient['birth_date']?.toString())),
+                                    'Sexo',
+                                    patient['sex'] ?? 'No especificado',
+                                  ),
+                                  _buildPatientInfoRow(
+                                    'Temperamento',
+                                    patient['temper'] ?? 'No especificado',
+                                  ),
+                                  _buildPatientInfoRow(
+                                    'Edad',
+                                    _calculateAge(
+                                      patient['birth_date']?.toString(),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1108,8 +1122,11 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                                   _buildVitalSign('Temperatura', '38.5 °C'),
                                   _buildVitalSign('Respiración', '22 rpm'),
                                   _buildVitalSign('Pulso', '90 ppm'),
-                                  _buildVitalSign('Hidratación', 'Normal',
-                                      isNormal: true),
+                                  _buildVitalSign(
+                                    'Hidratación',
+                                    'Normal',
+                                    isNormal: true,
+                                  ),
                                 ],
                               ),
                             ),
@@ -1124,14 +1141,22 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                               ),
                             ),
                             const SizedBox(height: 16), // mb-4
-                            _buildChangeItem('Bloque de historia creado',
-                                'Dr. Smith - Hoy a las 10:30 AM'),
-                            _buildChangeItem('Archivo adjuntado',
-                                'analisis_sangre_max.pdf Dr. Smith - Hoy a las 10:32 AM'),
-                            _buildChangeItem('Bloque de historia bloqueado',
-                                'Dr. Smith - 15 Sep a las 09:15 AM'),
-                            _buildChangeItem('Bloque de historia creado',
-                                'Dr. Smith - 15 Sep a las 09:00 AM'),
+                            _buildChangeItem(
+                              'Bloque de historia creado',
+                              'Dr. Smith - Hoy a las 10:30 AM',
+                            ),
+                            _buildChangeItem(
+                              'Archivo adjuntado',
+                              'analisis_sangre_max.pdf Dr. Smith - Hoy a las 10:32 AM',
+                            ),
+                            _buildChangeItem(
+                              'Bloque de historia bloqueado',
+                              'Dr. Smith - 15 Sep a las 09:15 AM',
+                            ),
+                            _buildChangeItem(
+                              'Bloque de historia creado',
+                              'Dr. Smith - 15 Sep a las 09:00 AM',
+                            ),
                           ],
                         ),
                       );
@@ -1151,10 +1176,7 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
         children: [
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF6B7280),
-            ),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
           ),
           Text(
             value,
@@ -1226,11 +1248,14 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
 /// Editor de historias médicas
 class _HistoryEditor extends StatefulWidget {
   final String clinicId;
-  final String mrn;
+  final String historyNumber;
   final Map<String, dynamic>? record;
 
-  const _HistoryEditor(
-      {required this.clinicId, required this.mrn, this.record});
+  const _HistoryEditor({
+    required this.clinicId,
+    required this.historyNumber,
+    this.record,
+  });
 
   @override
   State<_HistoryEditor> createState() => _HistoryEditorState();
@@ -1275,19 +1300,20 @@ class _HistoryEditorState extends State<_HistoryEditor> {
 
   Future<void> _save() async {
     // Usar DataService para obtener el texto plano del contenido
-    final summaryText =
-        DataService.getPlainText(_controller.document.toDelta().toJson());
+    final summaryText = DataService.getPlainText(
+      _controller.document.toDelta().toJson(),
+    );
 
     final payload = {
       'clinic_id': widget.clinicId,
-      'patient_id': widget.mrn,
+      'patient_id': widget.historyNumber,
       'date': _date.toIso8601String().substring(0, 10),
       'title': _titleCtrl.text.isEmpty ? null : _titleCtrl.text,
       'summary': summaryText.isEmpty ? null : summaryText,
       'doctor': _dxCtrl.text.isEmpty ? null : _dxCtrl.text,
       'department_code': _dept,
       'locked': _locked,
-      'content_delta': jsonEncode(_controller.document.toDelta().toJson()),
+      'notes': jsonEncode(_controller.document.toDelta().toJson()),
       'created_by': null,
     };
 
@@ -1303,9 +1329,9 @@ class _HistoryEditorState extends State<_HistoryEditor> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
       }
     }
   }
@@ -1314,9 +1340,11 @@ class _HistoryEditorState extends State<_HistoryEditor> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.record == null
-            ? 'Nuevo bloque de historia'
-            : 'Editar historia'),
+        title: Text(
+          widget.record == null
+              ? 'Nuevo bloque de historia'
+              : 'Editar historia',
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -1352,9 +1380,7 @@ class _HistoryEditorState extends State<_HistoryEditor> {
                 Expanded(
                   child: TextField(
                     controller: _titleCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Título',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Título'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1373,8 +1399,10 @@ class _HistoryEditorState extends State<_HistoryEditor> {
                 const SizedBox(width: 12),
                 // Switch personalizado en lugar de SwitchListTile
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(color: const Color(0xFFE5E7EB)),
                     borderRadius: BorderRadius.circular(8),
@@ -1398,17 +1426,13 @@ class _HistoryEditorState extends State<_HistoryEditor> {
 
             TextField(
               controller: _dxCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Diagnóstico',
-              ),
+              decoration: const InputDecoration(labelText: 'Diagnóstico'),
             ),
 
             const SizedBox(height: 16),
 
             // Editor Quill
-            QuillSimpleToolbar(
-              controller: _controller,
-            ),
+            QuillSimpleToolbar(controller: _controller),
 
             const SizedBox(height: 8),
 
@@ -1419,9 +1443,7 @@ class _HistoryEditorState extends State<_HistoryEditor> {
                   border: Border.all(color: AppTheme.neutral200),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: QuillEditor.basic(
-                  controller: _controller,
-                ),
+                child: QuillEditor.basic(controller: _controller),
               ),
             ),
           ],
@@ -1451,7 +1473,7 @@ class _NewPatientForm extends StatefulWidget {
 class _NewPatientFormState extends State<_NewPatientForm> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _mrnController = TextEditingController();
+  final _historyNumberController = TextEditingController();
   final _breedController = TextEditingController();
   final _ageController = TextEditingController();
   final _ownerNameController = TextEditingController();
@@ -1465,7 +1487,7 @@ class _NewPatientFormState extends State<_NewPatientForm> {
   @override
   void dispose() {
     _nameController.dispose();
-    _mrnController.dispose();
+    _historyNumberController.dispose();
     _breedController.dispose();
     _ageController.dispose();
     _ownerNameController.dispose();
@@ -1482,23 +1504,26 @@ class _NewPatientFormState extends State<_NewPatientForm> {
     });
 
     try {
-      // Usar MRN manual o generar uno automático
-      String mrn = _mrnController.text.trim();
-      if (mrn.isEmpty) {
-        mrn = await _generateUniqueMRN();
+      // Usar history_number manual o generar uno automático
+      String historyNumber = _historyNumberController.text.trim();
+      if (historyNumber.isEmpty) {
+        historyNumber = await _generateUniqueHistoryNumber();
       } else {
-        // Validar que el MRN no exista
+        // Validar que el history_number no exista
         final existingPatient = await _supa
             .from('patients')
             .select('id')
             .eq('clinic_id', widget.clinicId)
-            .eq('mrn', mrn)
+            .eq('history_number', historyNumber)
             .maybeSingle();
 
         if (existingPatient != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('El MRN ya existe. Por favor, use otro número.')),
+              content: Text(
+                'El número de historia ya existe. Por favor, use otro número.',
+              ),
+            ),
           );
           return;
         }
@@ -1514,7 +1539,7 @@ class _NewPatientFormState extends State<_NewPatientForm> {
         'birth_date': _ageController.text.trim().isNotEmpty
             ? DateTime.parse(_ageController.text.trim())
             : null,
-        'mrn': mrn,
+        'history_number': historyNumber,
         'created_at': DateTime.now().toIso8601String(),
       };
 
@@ -1539,17 +1564,19 @@ class _NewPatientFormState extends State<_NewPatientForm> {
       }
 
       if (mounted) {
-        Navigator.pop(
-            context, {'mrn': mrn, 'patientId': patientResponse['id']});
+        Navigator.pop(context, {
+          'historyNumber': historyNumber,
+          'patientId': patientResponse['id'],
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Paciente creado exitosamente')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al crear paciente: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al crear paciente: $e')));
       }
     } finally {
       if (mounted) {
@@ -1560,22 +1587,22 @@ class _NewPatientFormState extends State<_NewPatientForm> {
     }
   }
 
-  Future<String> _generateUniqueMRN() async {
-    // Obtener el último MRN de la clínica
+  Future<String> _generateUniqueHistoryNumber() async {
+    // Obtener el último history_number de la clínica
     final lastPatient = await _supa
         .from('patients')
-        .select('mrn')
+        .select('history_number')
         .eq('clinic_id', widget.clinicId)
-        .order('mrn', ascending: false)
+        .order('history_number', ascending: false)
         .limit(1)
         .maybeSingle();
 
     int nextNumber = 1;
-    if (lastPatient != null && lastPatient['mrn'] != null) {
-      final lastMRN = lastPatient['mrn'].toString();
-      if (lastMRN.length >= 6) {
-        nextNumber =
-            int.parse(lastMRN.substring(2)) + 1; // Asumiendo formato 00XXXX
+    if (lastPatient != null && lastPatient['history_number'] != null) {
+      final lastHistoryNumber = lastPatient['history_number'].toString();
+      if (lastHistoryNumber.length >= 6) {
+        nextNumber = int.parse(lastHistoryNumber.substring(2)) +
+            1; // Asumiendo formato 00XXXX
       }
     }
 
@@ -1646,9 +1673,9 @@ class _NewPatientFormState extends State<_NewPatientForm> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: TextFormField(
-                      controller: _mrnController,
+                      controller: _historyNumberController,
                       decoration: const InputDecoration(
-                        labelText: 'MRN (6 dígitos)',
+                        labelText: 'Número de Historia (6 dígitos)',
                         border: OutlineInputBorder(),
                         helperText: 'Dejar vacío para generar automáticamente',
                       ),
@@ -1657,10 +1684,10 @@ class _NewPatientFormState extends State<_NewPatientForm> {
                       validator: (value) {
                         if (value != null && value.trim().isNotEmpty) {
                           if (value.trim().length != 6) {
-                            return 'El MRN debe tener 6 dígitos';
+                            return 'El número de historia debe tener 6 dígitos';
                           }
                           if (!RegExp(r'^\d{6}$').hasMatch(value.trim())) {
-                            return 'El MRN debe contener solo números';
+                            return 'El número de historia debe contener solo números';
                           }
                         }
                         return null;
@@ -1683,7 +1710,8 @@ class _NewPatientFormState extends State<_NewPatientForm> {
                       ),
                       items: ['Canino', 'Felino', 'Ave', 'Reptil', 'Otro']
                           .map(
-                              (e) => DropdownMenuItem(value: e, child: Text(e)))
+                            (e) => DropdownMenuItem(value: e, child: Text(e)),
+                          )
                           .toList(),
                       onChanged: (value) =>
                           setState(() => _selectedSpecies = value!),
@@ -1719,7 +1747,8 @@ class _NewPatientFormState extends State<_NewPatientForm> {
                       ),
                       items: ['Macho', 'Hembra']
                           .map(
-                              (e) => DropdownMenuItem(value: e, child: Text(e)))
+                            (e) => DropdownMenuItem(value: e, child: Text(e)),
+                          )
                           .toList(),
                       onChanged: (value) =>
                           setState(() => _selectedSex = value!),
@@ -1810,10 +1839,7 @@ class _AnimatedButton extends StatefulWidget {
   final VoidCallback onTap;
   final Widget child;
 
-  const _AnimatedButton({
-    required this.onTap,
-    required this.child,
-  });
+  const _AnimatedButton({required this.onTap, required this.child});
 
   @override
   State<_AnimatedButton> createState() => _AnimatedButtonState();
@@ -1831,9 +1857,10 @@ class _AnimatedButtonState extends State<_AnimatedButton>
       duration: const Duration(milliseconds: 150),
       vsync: this,
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.95,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override

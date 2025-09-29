@@ -58,31 +58,53 @@ class HospitalizedPatientsWidget extends StatelessWidget {
 
                 final patients = snapshot.data ?? [];
 
-                // Si no hay pacientes hospitalizados, mostrar mensaje
+                // Si no hay pacientes hospitalizados, mostrar mensaje con botón de agregar
                 if (patients.isEmpty) {
-                  return Container(
-                    height: 100,
-                    padding: EdgeInsets.all(16),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Iconsax.empty_wallet,
-                            size: 32,
-                            color: home.AppColors.neutral400,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'No hay pacientes hospitalizados',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: home.AppColors.neutral500,
+                  return ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      Container(
+                        width: 120,
+                        margin: EdgeInsets.only(right: 8),
+                        child: _buildAddPatientCard(),
+                      ),
+                      Container(
+                        width: 200,
+                        margin: EdgeInsets.only(right: 8),
+                        child: Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: home.AppColors.neutral50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: home.AppColors.neutral200,
+                              width: 1,
                             ),
                           ),
-                        ],
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Iconsax.empty_wallet,
+                                  size: 32,
+                                  color: home.AppColors.neutral400,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'No hay pacientes hospitalizados',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: home.AppColors.neutral500,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   );
                 }
 
@@ -295,11 +317,11 @@ class HospitalizedPatientsWidget extends StatelessWidget {
 
                             const SizedBox(
                                 height:
-                                    3), // Aumentado para más espaciado entre nombre y MRN
+                                    3), // Aumentado para más espaciado entre nombre y historia
 
-                            // MRN
+                            // Historia
                             Text(
-                              'MRN: ${patient.mrn}',
+                              'Historia: ${patient.historyNumber}',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: home.AppColors.neutral600,
@@ -308,7 +330,7 @@ class HospitalizedPatientsWidget extends StatelessWidget {
 
                             const SizedBox(
                                 height:
-                                    3), // Aumentado para más espaciado entre MRN y especie/raza
+                                    3), // Aumentado para más espaciado entre historia y especie/raza
 
                             // Especie y raza
                             Text(

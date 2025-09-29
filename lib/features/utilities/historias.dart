@@ -14,13 +14,13 @@ class HistoriasPage extends StatefulWidget {
   static const String route = '/historias';
 
   final String? patientId;
-  final String? mrn; // Agregar soporte para MRN
+  final String? historyNumber; // Agregar soporte para history_number
   final String authorName;
 
   const HistoriasPage({
     super.key,
     this.patientId,
-    this.mrn,
+    this.historyNumber,
     this.authorName = 'Veterinaria',
   });
 
@@ -30,13 +30,13 @@ class HistoriasPage extends StatefulWidget {
 
 class _HistoriasPageState extends State<HistoriasPage> {
   // Estado de la UI
-  String? _selectedPatientId;
+  // String? _selectedPatientId; // TODO: Use if needed for future functionality
 
   @override
   void initState() {
     super.initState();
     _initializeDateFormatting();
-    _selectedPatientId = widget.patientId ?? widget.mrn;
+    // _selectedPatientId = widget.patientId ?? widget.mrn;
   }
 
   Future<void> _initializeDateFormatting() async {
@@ -122,7 +122,8 @@ class _HistoriasPageState extends State<HistoriasPage> {
     return OptimizedHistoriasPage(
       clinicId:
           '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203', // TODO: Obtener del contexto
-      mrn: widget.mrn, // Usar el MRN directamente, no el patientId
+      historyNumber: widget
+          .historyNumber, // Usar el history_number directamente, no el patientId
     );
   }
 }

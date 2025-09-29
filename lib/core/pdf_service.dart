@@ -12,6 +12,7 @@ class PDFService {
     required String clinicName,
     required String clinicAddress,
     required String clinicPhone,
+    required String clinicEmail,
   }) async {
     final pdf = pw.Document();
 
@@ -24,23 +25,24 @@ class PDFService {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(20),
+        pageFormat: PdfPageFormat.letter, // Formato carta como solicitas
+        margin: const pw.EdgeInsets.all(30),
         build: (pw.Context context) {
           return [
-            _buildHeader(
+            _buildModernHeader(
                 logoProvider,
                 clinicName,
+                clinicAddress,
+                clinicPhone,
+                clinicEmail,
                 medicalRecords.isNotEmpty
                     ? medicalRecords.first['mrn'] ?? 'N/A'
                     : 'N/A'),
-            pw.SizedBox(height: 20),
-            _buildOwnerSection(patient),
-            pw.SizedBox(height: 15),
-            _buildPatientSection(patient),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 25),
+            _buildPatientInfoSection(patient),
+            pw.SizedBox(height: 25),
             _buildMedicalHistorySection(medicalRecords),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 25),
             _buildFooter(),
           ];
         },
@@ -520,5 +522,241 @@ class PDFService {
     } catch (e) {
       return null;
     }
+  }
+
+  static pw.Widget _buildModernHeader(
+      pw.ImageProvider? logo,
+      String clinicName,
+      String clinicAddress,
+      String clinicPhone,
+      String clinicEmail,
+      String historyNumber) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            if (logo != null) pw.Image(logo, width: 120, height: 40),
+            pw.SizedBox(height: 8),
+            pw.Text(
+              clinicName,
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey800,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              clinicAddress,
+              style: pw.TextStyle(
+                fontSize: 10,
+                color: PdfColors.grey600,
+              ),
+            ),
+            pw.Text(
+              clinicEmail,
+              style: pw.TextStyle(
+                fontSize: 10,
+                color: PdfColors.grey600,
+              ),
+            ),
+            pw.Text(
+              clinicPhone,
+              style: pw.TextStyle(
+                fontSize: 10,
+                color: PdfColors.grey600,
+              ),
+            ),
+          ],
+        ),
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text(
+              'Historia Médica Completa',
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey800,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              'Generado el: ${DateFormat('dd MMMM yyyy', 'es').format(DateTime.now())}',
+              style: pw.TextStyle(
+                fontSize: 10,
+                color: PdfColors.grey600,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildPatientInfoSection(Map<String, dynamic> patient) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(20),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300, width: 1),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'Información del Paciente',
+            style: pw.TextStyle(
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.grey800,
+            ),
+          ),
+          pw.SizedBox(height: 15),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Imagen del paciente (placeholder)
+              pw.Container(
+                width: 80,
+                height: 80,
+                decoration: pw.BoxDecoration(
+                  shape: pw.BoxShape.circle,
+                  border: pw.Border.all(color: PdfColors.grey300, width: 2),
+                  color: PdfColors.grey200,
+                ),
+                child: pw.Center(
+                  child: pw.Text(
+                    '📷',
+                    style: pw.TextStyle(fontSize: 24),
+                  ),
+                ),
+              ),
+              pw.SizedBox(width: 20),
+              // Información del paciente
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Row(
+                      children: [
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              _buildInfoField(
+                                  'Nombre', patient['name'] ?? 'N/A'),
+                              pw.SizedBox(height: 8),
+                              _buildInfoField(
+                                  'Raza', patient['breed'] ?? 'N/A'),
+                              pw.SizedBox(height: 8),
+                              _buildInfoField('Propietario/a',
+                                  patient['owner_name'] ?? 'N/A'),
+                            ],
+                          ),
+                        ),
+                        pw.SizedBox(width: 20),
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              _buildInfoField('MRN', patient['mrn'] ?? 'N/A'),
+                              pw.SizedBox(height: 8),
+                              _buildInfoField(
+                                  'Sexo', _getSexDescription(patient)),
+                              pw.SizedBox(height: 8),
+                              _buildInfoField(
+                                  'Contacto', patient['owner_phone'] ?? 'N/A'),
+                              pw.SizedBox(height: 8),
+                              _buildInfoField(
+                                  'Especie', _getSpeciesDescription(patient)),
+                              pw.SizedBox(height: 8),
+                              _buildInfoField('Fecha de Nacimiento',
+                                  _getBirthDateDescription(patient)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildInfoField(String label, String value) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(
+          width: 60,
+          child: pw.Text(
+            '$label:',
+            style: pw.TextStyle(
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.grey700,
+            ),
+          ),
+        ),
+        pw.Expanded(
+          child: pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: 10,
+              color: PdfColors.grey800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _getSexDescription(Map<String, dynamic> patient) {
+    final sex = patient['sex'] ?? '';
+    final neutered = patient['neutered'] == true;
+    if (sex.toLowerCase() == 'm' || sex.toLowerCase() == 'male') {
+      return neutered ? 'Macho (Castrado)' : 'Macho';
+    } else if (sex.toLowerCase() == 'f' || sex.toLowerCase() == 'female') {
+      return neutered ? 'Hembra (Esterilizada)' : 'Hembra';
+    }
+    return sex;
+  }
+
+  static String _getSpeciesDescription(Map<String, dynamic> patient) {
+    final speciesCode = patient['species_code'] ?? '';
+    switch (speciesCode.toUpperCase()) {
+      case 'DOG':
+        return 'Canino';
+      case 'CAT':
+        return 'Felino';
+      case 'OTHER':
+        return 'Otros';
+      default:
+        return speciesCode;
+    }
+  }
+
+  static String _getBirthDateDescription(Map<String, dynamic> patient) {
+    final birthDate = patient['birth_date'];
+    if (birthDate == null) return 'N/A';
+
+    try {
+      final date = DateTime.tryParse(birthDate);
+      if (date != null) {
+        final age = DateTime.now().year - date.year;
+        final formattedDate = DateFormat('dd MMMM yyyy', 'es').format(date);
+        return '$formattedDate ($age años)';
+      }
+    } catch (e) {
+      // Error parsing date
+    }
+    return birthDate.toString();
   }
 }

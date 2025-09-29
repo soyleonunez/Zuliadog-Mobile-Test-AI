@@ -9,8 +9,8 @@ class PatientSearchRow {
   final String patientId;
   final String clinicId;
   final String patientName;
-  final String? historyNumber; // MRN (ej. 001000)
-  final int? mrnInt;
+  final String? historyNumber; // history_number (ej. 001000)
+  final int? historyNumberInt;
   final String? ownerName;
   final String? ownerPhone;
   final String? ownerEmail;
@@ -24,7 +24,7 @@ class PatientSearchRow {
     required this.clinicId,
     required this.patientName,
     required this.historyNumber,
-    required this.mrnInt,
+    required this.historyNumberInt,
     required this.ownerName,
     required this.ownerPhone,
     required this.ownerEmail,
@@ -44,12 +44,14 @@ class PatientSearchRow {
           '',
       historyNumber: j['history_number']?.toString() ??
           j['history_number_snapshot']?.toString(),
-      mrnInt: j['mrn_int'] is num ? (j['mrn_int'] as num).toInt() : null,
+      historyNumberInt: j['history_number_int'] is num
+          ? (j['history_number_int'] as num).toInt()
+          : null,
       ownerName:
           j['owner_name']?.toString() ?? j['owner_name_snapshot']?.toString(),
       ownerPhone: j['owner_phone']?.toString(),
       ownerEmail: j['owner_email']?.toString(),
-      species: _getSpeciesLabel(j['patient_species_code']),
+      species: _getSpeciesLabel(j['species_code']),
       breed: j['breed_label']?.toString() ?? j['breed']?.toString(),
       breedId: j['breed_id']?.toString(),
       sex: j['sex']?.toString(),
@@ -83,47 +85,31 @@ class PatientSearchRow {
 class SearchRepository {
   final SupabaseClient _db = Supabase.instance.client;
 
-  /// Busca en v_app por MRN exacto, nombre de paciente o nombre de dueño.
+  /// Busca en la vista v_app.
   Future<List<PatientSearchRow>> search(String query, {int limit = 30}) async {
     final q = query.trim();
 
-    final baseSel = _db.from('v_app').select('*');
-
-    if (q.isEmpty) {
-      // Lista inicial (suave): algunos pacientes ordenados por nombre
-      final rows =
-          await baseSel.order('patient_name', ascending: true).limit(limit);
-      return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
-    }
-
-    // Usar la misma lógica simple que funciona en pacientes.dart
     try {
+      var baseSel = _db.from('v_app').select('*');
+
+      if (q.isEmpty) {
+        // Lista inicial: algunos pacientes ordenados por nombre
+        final rows =
+            await baseSel.order('patient_name', ascending: true).limit(limit);
+        return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
+      }
+
+      // Buscar en múltiples campos de v_app
       final rows = await baseSel
-          .or('patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%')
+          .or('patient_name.ilike.%$q%,history_number.ilike.%$q%,history_number_snapshot.ilike.%$q%,owner_name.ilike.%$q%')
           .order('patient_name', ascending: true)
           .limit(limit);
 
-      return _processSearchResults(rows);
+      return rows.map((e) => PatientSearchRow.fromJson(e)).toList();
     } catch (e) {
       // Si hay error, retornar lista vacía
       return [];
     }
-  }
-
-  /// Procesa los resultados de búsqueda evitando duplicados
-  List<PatientSearchRow> _processSearchResults(List<dynamic> rows) {
-    // Agrupar por patient_id para evitar duplicados
-    final Map<String, Map<String, dynamic>> uniquePatients = {};
-    for (final record in rows) {
-      final patientId = record['patient_id'] ?? record['patient_uuid'];
-      if (patientId != null && !uniquePatients.containsKey(patientId)) {
-        uniquePatients[patientId] = record;
-      }
-    }
-
-    return uniquePatients.values
-        .map((e) => PatientSearchRow.fromJson(e))
-        .toList();
   }
 }
 
@@ -214,7 +200,7 @@ class _BuscadorPageState extends State<BuscadorPage> {
               controller: _controller,
               onChanged: _onChanged,
               decoration: InputDecoration(
-                hintText: 'Buscar por MRN (#001000), paciente o dueño',
+                hintText: 'Buscar por historia (#001000), paciente o dueño',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -243,7 +229,7 @@ class _BuscadorPageState extends State<BuscadorPage> {
                       final subtitleParts = <String>[
                         if (it.historyNumber != null &&
                             it.historyNumber!.isNotEmpty)
-                          'MRN: ${it.historyNumber}',
+                          'Historia: ${it.historyNumber}',
                         if (it.ownerName?.isNotEmpty == true)
                           'Dueño: ${it.ownerName}',
                         if ((it.species?.isNotEmpty ?? false) ||

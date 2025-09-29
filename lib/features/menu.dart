@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:zuliadog/auth/login.dart';
+import 'package:zuliadog/features/auth/welcome_screen.dart';
 import 'package:zuliadog/features/home.dart';
 
 enum UserRole { doctor, admin }
@@ -284,9 +284,9 @@ class AppSidebar extends StatelessWidget {
     );
   }
 
-  // Función para realizar el cierre de sesión
+  // Función para volver a la pantalla de bienvenida
   void _performLogout(BuildContext context) {
-    // Navegar a la pantalla de login
+    // Navegar a la pantalla de bienvenida
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => const WelcomeScreen(),

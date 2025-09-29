@@ -3,6 +3,7 @@ import '../menu.dart';
 import '../home.dart' as home;
 import '../../core/navigation.dart';
 import 'hospitalizacion.dart';
+import 'widgets/reports_widget.dart';
 
 class ReportesPage extends StatelessWidget {
   const ReportesPage({super.key});
@@ -39,32 +40,7 @@ class ReportesPage extends StatelessWidget {
                   _TopBar(title: 'Reportes'),
                   const Divider(height: 1, color: home.AppColors.neutral200),
                   Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.bar_chart,
-                            size: 64,
-                            color: home.AppColors.neutral400,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Reportes y Análisis',
-                            style: home.AppText.titleL.copyWith(
-                              color: home.AppColors.neutral700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Genera reportes y análisis de datos',
-                            style: home.AppText.bodyM.copyWith(
-                              color: home.AppColors.neutral500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: ReportsWidget(),
                   ),
                 ],
               ),

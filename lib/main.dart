@@ -13,8 +13,8 @@ import 'package:zuliadog/features/utilities/hospitalizacion.dart';
 import 'package:zuliadog/features/utilities/recursos.dart';
 import 'package:zuliadog/features/utilities/tickets.dart';
 import 'package:zuliadog/features/utilities/reportes.dart';
-import 'package:zuliadog/auth/service.dart';
-import 'package:zuliadog/auth/login.dart';
+import 'package:zuliadog/core/config.dart';
+import 'package:zuliadog/features/auth/welcome_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +40,8 @@ void main() async {
     FlutterError.presentError(details);
   };
 
-  await SupabaseService.init();
+  // Inicializar Supabase con la nueva configuración
+  await AppConfig.initializeSupabase();
   runApp(const ZuliadogApp());
 }
 
@@ -70,12 +71,10 @@ class ZuliadogApp extends StatelessWidget {
         HistoriasPage.route: (context) {
           final args = ModalRoute.of(context)?.settings.arguments
               as Map<String, dynamic>?;
-          print('🔍 main.dart - args recibidos: $args');
-          print('🔍 main.dart - patient_id: ${args?['patient_id']}');
-          print('🔍 main.dart - mrn: ${args?['mrn']}');
+          // Args recibidos para navegación
           return HistoriasPage(
             patientId: args?['patient_id'],
-            mrn: args?['mrn'],
+            historyNumber: args?['historyNumber'],
           );
         },
         RecetasPage.route: (context) => const RecetasPage(),

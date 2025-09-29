@@ -291,7 +291,8 @@ class DetailPanelWidget extends StatelessWidget {
                 [
                   _buildInfoRow(
                       'Nombre', patient['patient_name'] ?? 'No especificado'),
-                  _buildInfoRow('MRN', patient['mrn'] ?? 'No especificado'),
+                  _buildInfoRow('Historia',
+                      patient['history_number'] ?? 'No especificado'),
                   _buildInfoRow('Sexo', patient['sex'] ?? 'No especificado'),
                   _buildInfoRow(
                       'Especie', patient['species_label'] ?? 'No especificada'),

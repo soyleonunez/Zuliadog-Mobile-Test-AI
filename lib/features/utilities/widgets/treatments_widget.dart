@@ -240,6 +240,28 @@ class _TreatmentsWidgetState extends State<TreatmentsWidget> {
       // Insertar el tratamiento principal
       await _supa.from('follows').insert(cleanTreatmentData);
 
+      // Generar entradas automáticas basadas en frecuencia
+      final frequency = treatmentData['frequency'] as String?;
+      final duration = treatmentData['duration_days'] as int? ?? 1;
+      final medicationName = treatmentData['medication_name'] as String? ?? '';
+      final dosage = treatmentData['dosage'] as String? ?? '';
+      final route = treatmentData['route'] as String? ?? '';
+
+      if (frequency != null && frequency.isNotEmpty) {
+        final frequencyEntries = await _generateFrequencyEntries(
+          frequency,
+          duration,
+          medicationName,
+          dosage,
+          route,
+          treatmentData,
+        );
+
+        if (frequencyEntries.isNotEmpty) {
+          await _supa.from('follows').insert(frequencyEntries);
+        }
+      }
+
       // Insertar los recordatorios automáticos si existen
       if (reminders.isNotEmpty) {
         final remindersData = reminders.map((reminder) {
@@ -278,5 +300,73 @@ class _TreatmentsWidgetState extends State<TreatmentsWidget> {
         ),
       );
     }
+  }
+
+  // Función para generar entradas automáticas basadas en frecuencia
+  Future<List<Map<String, dynamic>>> _generateFrequencyEntries(
+    String frequency,
+    int durationDays,
+    String medicationName,
+    String dosage,
+    String route,
+    Map<String, dynamic> baseTreatmentData,
+  ) async {
+    final entries = <Map<String, dynamic>>[];
+    final now = DateTime.now();
+
+    // Calcular el número de entradas basado en la frecuencia
+    int intervalHours;
+    int entriesPerDay;
+
+    switch (frequency.toLowerCase()) {
+      case 'cada 6 horas':
+        intervalHours = 6;
+        entriesPerDay = 4;
+        break;
+      case 'cada 8 horas':
+        intervalHours = 8;
+        entriesPerDay = 3;
+        break;
+      case 'cada 12 horas':
+        intervalHours = 12;
+        entriesPerDay = 2;
+        break;
+      case 'diario':
+        intervalHours = 24;
+        entriesPerDay = 1;
+        break;
+      case 'cada 4 horas':
+        intervalHours = 4;
+        entriesPerDay = 6;
+        break;
+      default:
+        return entries; // No generar entradas para frecuencias no reconocidas
+    }
+
+    // Generar entradas para cada día
+    for (int day = 0; day < durationDays; day++) {
+      final currentDay = now.add(Duration(days: day));
+
+      for (int entry = 0; entry < entriesPerDay; entry++) {
+        final scheduledTime =
+            currentDay.add(Duration(hours: entry * intervalHours));
+
+        // Crear entrada de calendario
+        final entryData = Map<String, dynamic>.from(baseTreatmentData);
+        entryData['id'] = null; // Auto-generar ID
+        entryData['scheduled_time'] = scheduledTime.toUtc().toIso8601String();
+        entryData['medication_name'] = medicationName;
+        entryData['dosage'] = dosage;
+        entryData['route'] = route;
+        entryData['frequency'] = frequency;
+        entryData['status'] = 'scheduled';
+        entryData['created_at'] = now.toUtc().toIso8601String();
+        entryData['updated_at'] = now.toUtc().toIso8601String();
+
+        entries.add(entryData);
+      }
+    }
+
+    return entries;
   }
 }

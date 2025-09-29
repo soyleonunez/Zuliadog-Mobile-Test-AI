@@ -12,9 +12,10 @@ import 'package:zuliadog/features/utilities/hospitalizacion.dart';
 import 'package:zuliadog/features/utilities/recursos.dart';
 import 'package:zuliadog/features/utilities/tickets.dart';
 import 'package:zuliadog/features/utilities/reportes.dart';
-import 'package:zuliadog/features/widgets/new_patient_form.dart';
+import 'package:zuliadog/features/widgets/patient_form.dart';
+import 'package:zuliadog/features/utilities/widgets/notification_widget.dart';
 import 'package:zuliadog/core/notifications.dart';
-import 'package:zuliadog/test_storage_access.dart';
+import '../../core/storage_test_service.dart';
 
 /// =======================
 /// Zuliadog — Home (Desktop) v2.2 (one-file)
@@ -77,7 +78,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // Fallback
       }
     } catch (e) {
-      print('Error al cargar clinic_id: $e');
       _clinicId = '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // Fallback
     }
   }
@@ -139,7 +139,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           alignment: Alignment.topCenter,
                           child: SingleChildScrollView(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 24),
+                              horizontal: 32,
+                              vertical: 24,
+                            ),
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 1600),
                               child: Row(
@@ -157,35 +159,76 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                           onSync: () async {
                                             // Probar acceso a buckets de storage
                                             print(
-                                                '🔄 INICIANDO PRUEBA DE STORAGE...');
+                                              '🔄 INICIANDO PRUEBA DE STORAGE...',
+                                            );
 
                                             try {
                                               final testService =
                                                   StorageTestService();
-                                              await testService
-                                                  .testSimpleAccess();
+                                              final results = await testService
+                                                  .testAllBuckets();
 
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
+                                              // Mostrar resultados en un diálogo
+                                              showDialog(
+                                                context: context,
+                                                builder: (context) =>
+                                                    AlertDialog(
+                                                  title: const Text(
+                                                    'Resultados de Storage',
+                                                  ),
+                                                  content: SizedBox(
+                                                    width: 600,
+                                                    height: 400,
+                                                    child:
+                                                        SingleChildScrollView(
+                                                      child:
+                                                          StorageTestResultsWidget(
+                                                        results: results,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(
+                                                        context,
+                                                      ).pop(),
+                                                      child: const Text(
+                                                        'Cerrar',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
                                                 const SnackBar(
                                                   content: Text(
-                                                      '✅ Prueba de Storage completada - Revisa la consola'),
+                                                    '✅ Prueba de Storage completada',
+                                                  ),
                                                   backgroundColor: Colors.green,
-                                                  duration:
-                                                      Duration(seconds: 3),
+                                                  duration: Duration(
+                                                    seconds: 3,
+                                                  ),
                                                 ),
                                               );
                                             } catch (e) {
                                               print(
-                                                  '❌ Error en prueba de storage: $e');
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
+                                                '❌ Error en prueba de storage: $e',
+                                              );
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
                                                 SnackBar(
                                                   content: Text(
-                                                      '❌ Error en prueba de storage: $e'),
+                                                    '❌ Error en prueba de storage: $e',
+                                                  ),
                                                   backgroundColor: Colors.red,
                                                   duration: const Duration(
-                                                      seconds: 5),
+                                                    seconds: 5,
+                                                  ),
                                                 ),
                                               );
                                             }
@@ -193,7 +236,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         ),
                                         const SizedBox(height: 16),
                                         _QuickActionsSection(
-                                            onNewPatient: _openNewPatientForm),
+                                          onNewPatient: _openNewPatientForm,
+                                        ),
                                         const SizedBox(height: 16),
                                         _ImportantSection(loading: loading),
                                         const SizedBox(height: 16),
@@ -213,7 +257,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   const SizedBox(width: 16),
                                   // RIGHT COLUMN
                                   const SizedBox(
-                                      width: 320, child: _RightColumnContent()),
+                                    width: 320,
+                                    child: _RightColumnContent(),
+                                  ),
                                 ],
                               ),
                             ),
@@ -304,32 +350,85 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
 
     try {
-      // Buscar en v_app con filtros múltiples (mismo patrón que funciona en historias)
+      // Buscar en patients con JOIN a owners y breeds
       final results = await Supabase.instance.client
-          .from('v_app')
-          .select('*')
+          .from('patients')
+          .select('''
+            id,
+            history_number,
+            name,
+            species_code,
+            breed_id,
+            breed,
+            sex,
+            birth_date,
+            weight_kg,
+            notes,
+            owner_id,
+            clinic_id,
+            history_number,
+            temper,
+            temperature,
+            respiration,
+            pulse,
+            hydration,
+            weight,
+            admission_date,
+            _patient_id,
+            created_at,
+            updated_at,
+            owners:owner_id (
+              name,
+              phone,
+              email
+            ),
+            breeds:breed_id (
+              label,
+              species_code,
+              species_label
+            )
+          ''')
           .eq('clinic_id', _clinicId!)
-          .or('patient_name.ilike.%$query%,history_number.ilike.%$query%,owner_name.ilike.%$query%')
+          .or('name.ilike.%$query%,history_number.ilike.%$query%')
           .limit(10);
 
-      // Agrupar por patient_id para evitar duplicados
-      final Map<String, Map<String, dynamic>> uniquePatients = {};
-      for (final record in results) {
-        final patientId = record['patient_id'] ?? record['patient_uuid'];
-        if (patientId != null && !uniquePatients.containsKey(patientId)) {
-          uniquePatients[patientId] = record;
-        }
-      }
+      // Procesar los resultados para crear el formato esperado
+      final processedResults = results.map((record) {
+        final owner = record['owners'] as Map<String, dynamic>?;
+        final breed = record['breeds'] as Map<String, dynamic>?;
+
+        return {
+          'patient_id': record['id'],
+          'patient_uuid': record['id'],
+          'clinic_id': record['clinic_id'],
+          'patient_name': record['name'],
+          'paciente_name_snapshot': record['name'],
+          'history_number': record['history_number'],
+          'history_number_snapshot': record['history_number'],
+          'history_number_int': record['history_number'],
+          'owner_name': owner?['name'],
+          'owner_name_snapshot': owner?['name'],
+          'owner_phone': owner?['phone'],
+          'owner_email': owner?['email'],
+          'species_code': record['species_code'],
+          'breed_label': breed?['label'],
+          'breed': breed?['label'],
+          'breed_id': record['breed_id'],
+          'sex': record['sex'],
+          'status': 'active',
+          'last_visit_at': record['created_at'],
+          'photo_path': null,
+        };
+      }).toList();
 
       setState(() {
-        _searchResults = uniquePatients.values.toList();
+        _searchResults = processedResults;
         _isSearching = false;
       });
     } catch (e) {
       setState(() {
         _isSearching = false;
       });
-      print('Error en búsqueda: $e');
     }
   }
 
@@ -402,7 +501,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           if (_searchResults.isNotEmpty)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.primary200,
                                 borderRadius: BorderRadius.circular(12),
@@ -454,7 +555,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     CircularProgressIndicator(
                                       strokeWidth: 2,
                                       valueColor: AlwaysStoppedAnimation<Color>(
-                                          AppColors.primary600),
+                                        AppColors.primary600,
+                                      ),
                                     ),
                                     SizedBox(height: 12),
                                     Text(
@@ -564,8 +666,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final name = patient['patient_name'] ??
         patient['paciente_name_snapshot'] ??
         'Sin nombre';
-    final species = _getSpeciesLabel(patient['patient_species_code']);
-    final mrn = patient['history_number'] ??
+    final species = _getSpeciesLabel(patient['species_code']);
+    final historyNumber = patient['history_number'] ??
         patient['history_number_snapshot'] ??
         'N/A';
     final ownerName = patient['owner_name'] ??
@@ -575,7 +677,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return InkWell(
       onTap: () {
         // TODO: Navegar a detalles del paciente
-        print('Seleccionado: $name');
         setState(() {
           _showSearchResults = false;
           _searchController.clear();
@@ -613,17 +714,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 1),
                   Text(
                     'Dueño: $ownerName',
-                    style: TextStyle(
-                      color: AppColors.neutral600,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: AppColors.neutral600, fontSize: 11),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (mrn != 'N/A') ...[
+                  if (historyNumber != 'N/A') ...[
                     const SizedBox(height: 1),
                     Text(
-                      'Historia: $mrn',
+                      'Historia: $historyNumber',
                       style: TextStyle(
                         color: AppColors.neutral500,
                         fontSize: 10,
@@ -702,8 +800,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Abrir formulario de nuevo paciente
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => NewPatientForm(
-          clinicId: _clinicId ?? '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203',
+        builder: (context) => ModernPatientForm(
           onPatientCreated: () {
             // Callback cuando se crea un paciente exitosamente
             Navigator.of(context).pop();
@@ -755,17 +852,24 @@ class _TopBar extends StatelessWidget {
             Flexible(
               child: Row(
                 children: [
-                  Text('Home',
-                      style:
-                          AppText.bodyM.copyWith(color: AppColors.neutral500)),
+                  Text(
+                    'Home',
+                    style: AppText.bodyM.copyWith(color: AppColors.neutral500),
+                  ),
                   const SizedBox(width: 8),
-                  Icon(Iconsax.arrow_right_3,
-                      size: 16, color: AppColors.neutral400),
+                  Icon(
+                    Iconsax.arrow_right_3,
+                    size: 16,
+                    color: AppColors.neutral400,
+                  ),
                   const SizedBox(width: 8),
-                  Text('Dashboard',
-                      style: AppText.bodyM.copyWith(
-                          color: AppColors.neutral900,
-                          fontWeight: FontWeight.w500)),
+                  Text(
+                    'Dashboard',
+                    style: AppText.bodyM.copyWith(
+                      color: AppColors.neutral900,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -788,10 +892,14 @@ class _TopBar extends StatelessWidget {
                   decoration: InputDecoration(
                     hintText:
                         'Buscar pacientes, documentos, tickets, historias…',
-                    hintStyle:
-                        AppText.bodyM.copyWith(color: AppColors.neutral400),
-                    prefixIcon: Icon(Iconsax.search_normal,
-                        size: 20, color: AppColors.neutral500),
+                    hintStyle: AppText.bodyM.copyWith(
+                      color: AppColors.neutral400,
+                    ),
+                    prefixIcon: Icon(
+                      Iconsax.search_normal,
+                      size: 20,
+                      color: AppColors.neutral500,
+                    ),
                     suffixIcon: isSearching
                         ? const Padding(
                             padding: EdgeInsets.all(12.0),
@@ -803,13 +911,18 @@ class _TopBar extends StatelessWidget {
                           )
                         : IconButton(
                             onPressed: () => onSearch(searchController.text),
-                            icon: Icon(Iconsax.filter,
-                                size: 18, color: AppColors.neutral500),
+                            icon: Icon(
+                              Iconsax.filter,
+                              size: 18,
+                              color: AppColors.neutral500,
+                            ),
                             tooltip: 'Buscar',
                           ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                   ),
                 ),
               ),
@@ -833,12 +946,8 @@ class _TopBar extends StatelessWidget {
                     onPressed: () {},
                   ),
                   const SizedBox(width: 8),
-                  _TopBarButton(
-                    icon: Iconsax.notification,
-                    tooltip: 'Notificaciones',
-                    badge: '3',
-                    onPressed: () {},
-                  ),
+                  // Widget de notificaciones
+                  NotificationWidget(),
                   const SizedBox(width: 16),
 
                   // Avatar de usuario
@@ -848,13 +957,16 @@ class _TopBar extends StatelessWidget {
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border:
-                            Border.all(color: AppColors.primary500, width: 2),
+                        border: Border.all(
+                          color: AppColors.primary500,
+                          width: 2,
+                        ),
                       ),
                       child: const CircleAvatar(
                         radius: 16,
-                        backgroundImage:
-                            AssetImage('Assets/Images/ProfileImage.png'),
+                        backgroundImage: AssetImage(
+                          'Assets/Images/ProfileImage.png',
+                        ),
                       ),
                     ),
                   ),
@@ -871,14 +983,12 @@ class _TopBar extends StatelessWidget {
 class _TopBarButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;
-  final String? badge;
   final VoidCallback onPressed;
 
   const _TopBarButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    this.badge,
   });
 
   @override
@@ -897,9 +1007,10 @@ class _TopBarButtonState extends State<_TopBarButton>
       duration: const Duration(milliseconds: 150),
       vsync: this,
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.9).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.9,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -937,30 +1048,6 @@ class _TopBarButtonState extends State<_TopBarButton>
                   padding: EdgeInsets.zero,
                 ),
               ),
-              if (widget.badge != null)
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: const BoxDecoration(
-                      color: AppColors.danger500,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints:
-                        const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text(
-                      widget.badge!,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
             ],
           ),
         );
@@ -1065,9 +1152,10 @@ class _QuickActionButtonState extends State<_QuickActionButton>
       duration: const Duration(milliseconds: 150),
       vsync: this,
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.95,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -1095,19 +1183,25 @@ class _QuickActionButtonState extends State<_QuickActionButton>
               onTap: _handleTap,
               borderRadius: BorderRadius.circular(8),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: widget.action.color.withOpacity(.08),
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: widget.action.color.withOpacity(.2)),
+                  border: Border.all(
+                    color: widget.action.color.withOpacity(.2),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(widget.action.icon,
-                        size: 14, color: widget.action.color),
+                    Icon(
+                      widget.action.icon,
+                      size: 14,
+                      color: widget.action.color,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       widget.action.label,
@@ -1149,14 +1243,16 @@ class _WelcomeHeader extends StatelessWidget {
           children: [
             Expanded(
               child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Hola, $doctorName', style: AppText.titleL),
-                    const SizedBox(height: 4),
-                    Text('Bienvenido al sistema de administración veterinario.',
-                        style: AppText.bodyM
-                            .copyWith(color: AppColors.neutral500)),
-                  ]),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Hola, $doctorName', style: AppText.titleL),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Bienvenido al sistema de administración veterinario.',
+                    style: AppText.bodyM.copyWith(color: AppColors.neutral500),
+                  ),
+                ],
+              ),
             ),
             // Botones de acción alineados arriba
             Row(
@@ -1213,7 +1309,6 @@ class _WelcomeHeader extends StatelessWidget {
                     child: InkWell(
                       onTap: () {
                         // Aquí irá la lógica para exportar datos
-                        print('Exportando datos...');
                       },
                       borderRadius: BorderRadius.circular(20),
                       child: Container(
@@ -1325,8 +1420,9 @@ class _ImportantCard extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                  color: item.backgroundColor,
-                  borderRadius: BorderRadius.circular(10)),
+                color: item.backgroundColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Icon(item.icon, size: 20, color: item.color),
             ),
             const SizedBox(width: 10),
@@ -1334,9 +1430,10 @@ class _ImportantCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.title,
-                      style:
-                          AppText.label.copyWith(color: AppColors.neutral700)),
+                  Text(
+                    item.title,
+                    style: AppText.label.copyWith(color: AppColors.neutral700),
+                  ),
                   const SizedBox(height: 2),
                   Text(item.value, style: AppText.titleM),
                 ],
@@ -1359,11 +1456,12 @@ class _WeeklyPerformanceCard extends StatelessWidget {
   final RangeWeeks range;
   final ValueChanged<RangeWeeks> onRangeChanged;
   final bool useRealChart;
-  const _WeeklyPerformanceCard(
-      {required this.loading,
-      required this.range,
-      required this.onRangeChanged,
-      required this.useRealChart});
+  const _WeeklyPerformanceCard({
+    required this.loading,
+    required this.range,
+    required this.onRangeChanged,
+    required this.useRealChart,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1373,20 +1471,25 @@ class _WeeklyPerformanceCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Rendimiento semanal', style: AppText.titleS),
-            const Spacer(),
-            _RangeSelector(range: range, onChanged: onRangeChanged),
-          ]),
-          const SizedBox(height: 8),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: loading
-                ? const _Skeleton(height: 220)
-                : const _ChartPlaceholder(),
-          ),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('Rendimiento semanal', style: AppText.titleS),
+                const Spacer(),
+                _RangeSelector(range: range, onChanged: onRangeChanged),
+              ],
+            ),
+            const SizedBox(height: 8),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: loading
+                  ? const _Skeleton(height: 220)
+                  : const _ChartPlaceholder(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1399,11 +1502,13 @@ class _ChartPlaceholder extends StatelessWidget {
     return Container(
       height: 260,
       decoration: BoxDecoration(
-          color: AppColors.neutral50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.neutral200)),
+        color: AppColors.neutral50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.neutral200),
+      ),
       child: const Center(
-          child: Text('Gráfico semanal (placeholder)', style: AppText.bodyS)),
+        child: Text('Gráfico semanal (placeholder)', style: AppText.bodyS),
+      ),
     );
   }
 }
@@ -1415,52 +1520,59 @@ class _RangeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints:
-          const BoxConstraints(minWidth: 250), // Ampliar espacio horizontal
+      constraints: const BoxConstraints(
+        minWidth: 250,
+      ), // Ampliar espacio horizontal
       child: SegmentedButton<RangeWeeks>(
         segments: const [
           ButtonSegment(
-              value: RangeWeeks.w4,
-              label: Text('Semana'),
-              icon: Icon(Iconsax.calendar_1, size: 16)),
+            value: RangeWeeks.w4,
+            label: Text('Semana'),
+            icon: Icon(Iconsax.calendar_1, size: 16),
+          ),
           ButtonSegment(
-              value: RangeWeeks.w12,
-              label: Text('Mes'),
-              icon: Icon(Iconsax.calendar_2, size: 16)),
+            value: RangeWeeks.w12,
+            label: Text('Mes'),
+            icon: Icon(Iconsax.calendar_2, size: 16),
+          ),
         ],
         selected: {range},
         showSelectedIcon: false,
         onSelectionChanged: (s) => onChanged(s.first),
         style: ButtonStyle(
           visualDensity: VisualDensity.compact,
-          backgroundColor: WidgetStateProperty.resolveWith<Color?>(
-            (Set<WidgetState> states) {
-              if (states.contains(WidgetState.selected)) {
-                return AppColors.primary500
-                    .withOpacity(0.12); // Fondo sutil solo para seleccionado
-              }
-              return Colors.transparent; // Sin fondo para no seleccionado
-            },
-          ),
-          foregroundColor: WidgetStateProperty.resolveWith<Color?>(
-            (Set<WidgetState> states) {
-              if (states.contains(WidgetState.selected)) {
-                return AppColors.primary600;
-              }
-              return AppColors.neutral600;
-            },
-          ),
-          side: WidgetStateProperty.resolveWith<BorderSide?>(
-            (Set<WidgetState> states) {
-              if (states.contains(WidgetState.selected)) {
-                return BorderSide(
-                    color: AppColors.primary500.withOpacity(0.3), width: 1);
-              }
-              return BorderSide(color: AppColors.neutral200, width: 1);
-            },
-          ),
+          backgroundColor: WidgetStateProperty.resolveWith<Color?>((
+            Set<WidgetState> states,
+          ) {
+            if (states.contains(WidgetState.selected)) {
+              return AppColors.primary500.withOpacity(
+                0.12,
+              ); // Fondo sutil solo para seleccionado
+            }
+            return Colors.transparent; // Sin fondo para no seleccionado
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith<Color?>((
+            Set<WidgetState> states,
+          ) {
+            if (states.contains(WidgetState.selected)) {
+              return AppColors.primary600;
+            }
+            return AppColors.neutral600;
+          }),
+          side: WidgetStateProperty.resolveWith<BorderSide?>((
+            Set<WidgetState> states,
+          ) {
+            if (states.contains(WidgetState.selected)) {
+              return BorderSide(
+                color: AppColors.primary500.withOpacity(0.3),
+                width: 1,
+              );
+            }
+            return BorderSide(color: AppColors.neutral200, width: 1);
+          }),
           shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
         ),
       ),
     );
@@ -1483,14 +1595,17 @@ class _RecentActivityTable extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Actividad reciente', style: AppText.titleS),
-          const SizedBox(height: 8),
-          if (loading)
-            const _Skeleton(height: 260)
-          else
-            _CompactTable(rows: rows),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Actividad reciente', style: AppText.titleS),
+            const SizedBox(height: 8),
+            if (loading)
+              const _Skeleton(height: 260)
+            else
+              _CompactTable(rows: rows),
+          ],
+        ),
       ),
     );
   }
@@ -1506,44 +1621,52 @@ class _CompactTable extends StatelessWidget {
         0: FixedColumnWidth(44),
         1: FlexColumnWidth(3),
         2: FlexColumnWidth(1.5),
-        3: FlexColumnWidth(1.2)
+        3: FlexColumnWidth(1.2),
       },
       defaultVerticalAlignment:
           TableCellVerticalAlignment.top, // TOP en lugar de middle
       children: [
         TableRow(
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppColors.neutral200)),
+          ),
+          children: [
+            _Th('#'),
+            _Th('Descripción'),
+            _Th('Estado'),
+            _Th('Fecha/Hora'),
+          ],
+        ),
+        ...rows.map(
+          (r) => TableRow(
             decoration: const BoxDecoration(
-                border:
-                    Border(bottom: BorderSide(color: AppColors.neutral200))),
+              border: Border(
+                bottom: BorderSide(color: AppColors.neutral200, width: .75),
+              ),
+            ),
             children: [
-              _Th('#'),
-              _Th('Descripción'),
-              _Th('Estado'),
-              _Th('Fecha/Hora'),
-            ]),
-        ...rows.map((r) => TableRow(
-              decoration: const BoxDecoration(
-                  border: Border(
-                      bottom:
-                          BorderSide(color: AppColors.neutral200, width: .75))),
-              children: [
-                Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Icon(r.icon, size: 18, color: AppColors.neutral700)),
-                Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(r.description, style: AppText.bodyS)),
-                Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: _StatusTag(
-                        label: r.status.label, color: r.status.color)),
-                Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(r.dateTimeString,
-                        style: AppText.bodyS
-                            .copyWith(color: AppColors.neutral500))),
-              ],
-            )),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Icon(r.icon, size: 18, color: AppColors.neutral700),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(r.description, style: AppText.bodyS),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: _StatusTag(label: r.status.label, color: r.status.color),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  r.dateTimeString,
+                  style: AppText.bodyS.copyWith(color: AppColors.neutral500),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1554,9 +1677,12 @@ class _Th extends StatelessWidget {
   const _Th(this.text);
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Text(text,
-          style: AppText.label.copyWith(color: AppColors.neutral700)));
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Text(
+          text,
+          style: AppText.label.copyWith(color: AppColors.neutral700),
+        ),
+      );
 }
 
 class _ActivityRow {
@@ -1580,7 +1706,11 @@ class _ActivityRow {
     ];
     final s = statuses[i % statuses.length];
     return _ActivityRow(
-        t.$1, t.$2, s, 'Hoy 10:${(i + 1).toString().padLeft(2, '0')}');
+      t.$1,
+      t.$2,
+      s,
+      'Hoy 10:${(i + 1).toString().padLeft(2, '0')}',
+    );
   }
 }
 
@@ -1600,10 +1730,7 @@ class _StatusTag extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        constraints: const BoxConstraints(
-          maxWidth: 80,
-          minWidth: 50,
-        ),
+        constraints: const BoxConstraints(maxWidth: 80, minWidth: 50),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
           color: color.withOpacity(.12),
@@ -1649,15 +1776,24 @@ class _RightColumnContentState extends State<_RightColumnContent> {
       children: [
         _MiniCalendarCard(
           month: _visibleMonth,
-          onPrev: () => setState(() => _visibleMonth =
-              DateTime(_visibleMonth.year, _visibleMonth.month - 1)),
-          onNext: () => setState(() => _visibleMonth =
-              DateTime(_visibleMonth.year, _visibleMonth.month + 1)),
+          onPrev: () => setState(
+            () => _visibleMonth = DateTime(
+              _visibleMonth.year,
+              _visibleMonth.month - 1,
+            ),
+          ),
+          onNext: () => setState(
+            () => _visibleMonth = DateTime(
+              _visibleMonth.year,
+              _visibleMonth.month + 1,
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         _TodayTasksCard(
-            tasks: tasks,
-            onToggle: (i) => setState(() => tasks[i] = tasks[i].toggle())),
+          tasks: tasks,
+          onToggle: (i) => setState(() => tasks[i] = tasks[i].toggle()),
+        ),
       ],
     );
   }
@@ -1667,8 +1803,11 @@ class _MiniCalendarCard extends StatelessWidget {
   final DateTime month;
   final VoidCallback onPrev;
   final VoidCallback onNext;
-  const _MiniCalendarCard(
-      {required this.month, required this.onPrev, required this.onNext});
+  const _MiniCalendarCard({
+    required this.month,
+    required this.onPrev,
+    required this.onNext,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1722,30 +1861,40 @@ class _MiniCalendarCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Text(_monthLabel(month), style: AppText.titleS),
-              const Spacer(),
-              IconButton(
+            Row(
+              children: [
+                Text(_monthLabel(month), style: AppText.titleS),
+                const Spacer(),
+                IconButton(
                   icon: const Icon(Iconsax.arrow_left_2, size: 18),
                   tooltip: 'Mes anterior',
-                  onPressed: onPrev),
-              IconButton(
+                  onPressed: onPrev,
+                ),
+                IconButton(
                   icon: const Icon(Iconsax.arrow_right_2, size: 18),
                   tooltip: 'Mes siguiente',
-                  onPressed: onNext),
-            ]),
+                  onPressed: onNext,
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: weekdayNames
-                  .map((d) => Expanded(
+                  .map(
+                    (d) => Expanded(
                       child: Center(
-                          child: Text(d,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.neutral700,
-                              )))))
+                        child: Text(
+                          d,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.neutral700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
             const SizedBox(height: 4),
@@ -1840,7 +1989,7 @@ class _MiniCalendarCard extends StatelessWidget {
       'Septiembre',
       'Octubre',
       'Noviembre',
-      'Diciembre'
+      'Diciembre',
     ];
     return '${meses[m.month - 1]} ${m.year}';
   }
@@ -1848,8 +1997,6 @@ class _MiniCalendarCard extends StatelessWidget {
   // Función para manejar el tap en una fecha (preparado para futuros eventos)
   void _onDateTap(DateTime date) {
     // Aquí se implementará la lógica para mostrar eventos del día
-    // Por ahora solo imprimimos la fecha seleccionada
-    print('Fecha seleccionada: ${date.day}/${date.month}/${date.year}');
 
     // TODO: Implementar funcionalidad de eventos
     // - Mostrar eventos del día seleccionado
@@ -1879,19 +2026,22 @@ class _TodayTasksCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Tareas de hoy', style: AppText.titleS),
-          const SizedBox(height: 6),
-          ...List.generate(tasks.length, (i) {
-            final t = tasks[i];
-            return _TaskRow(
-              title: t.title,
-              time: t.time,
-              done: t.done,
-              onChanged: (_) => onToggle(i),
-            );
-          }),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Tareas de hoy', style: AppText.titleS),
+            const SizedBox(height: 6),
+            ...List.generate(tasks.length, (i) {
+              final t = tasks[i];
+              return _TaskRow(
+                title: t.title,
+                time: t.time,
+                done: t.done,
+                onChanged: (_) => onToggle(i),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -1902,11 +2052,12 @@ class _TaskRow extends StatelessWidget {
   final String time;
   final bool done;
   final ValueChanged<bool?> onChanged;
-  const _TaskRow(
-      {required this.title,
-      required this.time,
-      required this.done,
-      required this.onChanged});
+  const _TaskRow({
+    required this.title,
+    required this.time,
+    required this.done,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1914,8 +2065,10 @@ class _TaskRow extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: const BoxDecoration(
-          border: Border(
-              bottom: BorderSide(color: AppColors.neutral200, width: .75))),
+        border: Border(
+          bottom: BorderSide(color: AppColors.neutral200, width: .75),
+        ),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start, // íconos/checkbox arriba
         children: [
@@ -1931,12 +2084,15 @@ class _TaskRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-              child: Text(title,
-                  style: AppText.bodyS.copyWith(
-                    color: done ? AppColors.neutral500 : AppColors.neutral900,
-                    decoration:
-                        done ? TextDecoration.lineThrough : TextDecoration.none,
-                  ))),
+            child: Text(
+              title,
+              style: AppText.bodyS.copyWith(
+                color: done ? AppColors.neutral500 : AppColors.neutral900,
+                decoration:
+                    done ? TextDecoration.lineThrough : TextDecoration.none,
+              ),
+            ),
+          ),
           const SizedBox(width: 8),
           _SmallTag(text: time, icon: Iconsax.clock),
         ],
@@ -1954,14 +2110,21 @@ class _SmallTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-          color: AppColors.neutral50,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.neutral200)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: AppColors.neutral700),
-        const SizedBox(width: 4),
-        Text(text, style: AppText.label.copyWith(color: AppColors.neutral700)),
-      ]),
+        color: AppColors.neutral50,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.neutral200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppColors.neutral700),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: AppText.label.copyWith(color: AppColors.neutral700),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1974,10 +2137,12 @@ class _Skeleton extends StatelessWidget {
   const _Skeleton({required this.height});
   @override
   Widget build(BuildContext context) => Container(
-      height: height,
-      decoration: BoxDecoration(
+        height: height,
+        decoration: BoxDecoration(
           color: AppColors.neutral200.withOpacity(.45),
-          borderRadius: BorderRadius.circular(12)));
+          borderRadius: BorderRadius.circular(12),
+        ),
+      );
 }
 
 class AppColors {
@@ -2003,15 +2168,33 @@ class AppColors {
 class AppText {
   // -1pt vs versiones anteriores
   static const titleL = TextStyle(
-      fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.neutral900);
+    fontSize: 30,
+    fontWeight: FontWeight.w700,
+    color: AppColors.neutral900,
+  );
   static const titleM = TextStyle(
-      fontSize: 22, fontWeight: FontWeight.w600, color: AppColors.neutral900);
+    fontSize: 22,
+    fontWeight: FontWeight.w600,
+    color: AppColors.neutral900,
+  );
   static const titleS = TextStyle(
-      fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.neutral900);
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    color: AppColors.neutral900,
+  );
   static const bodyM = TextStyle(
-      fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.neutral900);
+    fontSize: 15,
+    fontWeight: FontWeight.w500,
+    color: AppColors.neutral900,
+  );
   static const bodyS = TextStyle(
-      fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.neutral900);
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+    color: AppColors.neutral900,
+  );
   static const label = TextStyle(
-      fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.neutral900);
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: AppColors.neutral900,
+  );
 }

@@ -105,8 +105,8 @@ class HospitalizacionPage extends StatelessWidget {
 class HospitalizedPatient {
   final String id;
   final String patientName;
-  final String mrn;
-  final int? mrnInt;
+  final String historyNumber;
+  final int? historyNumberInt;
   final String sex;
   final DateTime? birthDate;
   final String? speciesId;
@@ -145,8 +145,8 @@ class HospitalizedPatient {
   HospitalizedPatient({
     required this.id,
     required this.patientName,
-    required this.mrn,
-    this.mrnInt,
+    required this.historyNumber,
+    this.historyNumberInt,
     required this.sex,
     this.birthDate,
     this.speciesId,
@@ -187,13 +187,11 @@ class HospitalizedPatient {
     return HospitalizedPatient(
       id: data['patient_id'] ?? '',
       patientName: data['patient_name'] ?? '',
-      mrn: data['history_number'] ??
-          data['mrn'] ??
-          data['patient_mrn'] ??
+      historyNumber: data['history_number'] ??
           data['history_number_snapshot'] ??
-          data['mrn_int']?.toString() ??
+          data['history_number_int']?.toString() ??
           '',
-      mrnInt: data['mrn_int'],
+      historyNumberInt: data['history_number_int'],
       sex: data['sex'] ?? '',
       birthDate: data['birth_date'] != null
           ? DateTime.tryParse(data['birth_date'])
@@ -267,11 +265,10 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
   late Stream<List<HospitalizedPatient>> _patientsStream;
 
   // Funciones auxiliares para obtener campos con fallback
-  String? _getPatientMrn(Map<String, dynamic> patient) {
+  String? _getPatientHistoryNumber(Map<String, dynamic> patient) {
     return patient['history_number'] ??
-        patient['mrn'] ??
-        patient['patient_mrn'] ??
-        patient['mrn_int']?.toString() ??
+        patient['history_number_snapshot'] ??
+        patient['history_number_int']?.toString() ??
         patient['patient_id'];
   }
 
@@ -296,20 +293,18 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
               .where((item) => item['hospitalization_status'] == 'active')
               .toList();
 
-          print(
-              '🏥 Loaded ${hospitalizedPatients.length} hospitalized patients');
+          // Loaded hospitalized patients
 
           return hospitalizedPatients.map((item) {
             // Usar datos directos de v_hosp cuando sean suficientes
             try {
               return HospitalizedPatient.fromJson(item);
             } catch (e) {
-              print('Error parsing patient: $e');
               // Crear un paciente de emergencia para evitar crashes
               return HospitalizedPatient(
                 id: item['patient_id']?.toString() ?? 'unknown',
                 patientName: item['patient_name']?.toString() ?? 'Paciente',
-                mrn: item['mrn']?.toString() ?? 'N/A',
+                historyNumber: item['history_number']?.toString() ?? 'N/A',
                 sex: item['sex']?.toString() ?? 'N/A',
                 speciesLabel:
                     item['species_label']?.toString() ?? 'Sin especie',
@@ -324,16 +319,13 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
             }
           }).toList();
         } catch (e) {
-          print('Error mapping hospital data: $e');
           return <HospitalizedPatient>[];
         }
       }).handleError((error) {
-        print('Stream error: $error');
         // Retornar lista vacía en caso de error para no bloquear UI
         return <HospitalizedPatient>[];
       });
     } catch (e) {
-      print('Error initializando stream: $e');
       // Stream de fallback que no bloquea
       _patientsStream = Stream.value(<HospitalizedPatient>[]);
     }
@@ -363,8 +355,6 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
         return _buildPatientsView();
       case HospitalizationView.gantt:
         return _buildGanttView();
-      case HospitalizationView.calendar:
-        return _buildCalendarView();
       case HospitalizationView.reports:
         return _buildReportsView();
     }
@@ -440,39 +430,6 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
               _selectedPatientId = null;
             }),
           ),
-      ],
-    );
-  }
-
-  Widget _buildCalendarView() {
-    return Row(
-      children: [
-        // Panel izquierdo: Calendario
-        Expanded(
-          flex: 3,
-          child: CalendarGanttWidget(
-            currentWeek: _currentWeek,
-            selectedTreatmentId: _selectedTreatmentId,
-            selectedPatientId: _selectedPatientId,
-            onTreatmentTap: (treatmentId) {
-              setState(() {
-                _selectedTreatmentId = treatmentId;
-              });
-            },
-            onTreatmentEdit: _editTreatment,
-            onTreatmentComplete: _completeTreatment,
-          ),
-        ),
-
-        // Panel derecho: Detalles
-        DetailPanelWidget(
-          selectedTreatmentId: _selectedTreatmentId,
-          selectedPatientId: _selectedPatientId,
-          onClose: () => setState(() {
-            _selectedTreatmentId = '';
-            _selectedPatientId = null;
-          }),
-        ),
       ],
     );
   }
@@ -574,7 +531,7 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'MRN: ${patient.mrn}',
+                    'Historia: ${patient.historyNumber}',
                     style: TextStyle(
                       fontSize: 12,
                       color: home.AppColors.neutral600,
@@ -613,10 +570,23 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
 
   // Función para navegar a la Historia Médica
   void _showHistory(HospitalizedPatient patient) {
+    print('🔍 _showHistory llamado para paciente:');
+    print('   - ID: ${patient.id}');
+    print('   - Nombre: ${patient.patientName}');
+    print('   - History Number: ${patient.historyNumber}');
+    print('   - History Number Int: ${patient.historyNumberInt}');
+
+    final arguments = {
+      'historyNumber': patient.historyNumber,
+      'patient_id': patient.id
+    };
+
+    print('🔍 Argumentos de navegación: $arguments');
+
     Navigator.pushNamed(
       context,
       '/historias',
-      arguments: {'mrn': patient.mrn, 'patient_id': patient.id},
+      arguments: arguments,
     );
   }
 
@@ -722,7 +692,7 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
         _loadPatientTreatmentsInCalendar(HospitalizedPatient(
           id: _selectedPatientId!,
           patientName: 'Paciente',
-          mrn: '',
+          historyNumber: '',
           sex: '',
           speciesLabel: '',
           breedLabel: '',
@@ -735,6 +705,10 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
           todayCompletions: 0,
         ));
       }
+
+      // Actualizar el stream de pacientes para reflejar cambios en tareas
+      print('🔄 Actualizando stream después de completar tratamiento...');
+      _initializeStreams();
     } catch (e) {
       print('Error updating treatment status: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -749,11 +723,11 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
   Future<void> _addPatientToHospitalization(
       Map<String, dynamic> patient) async {
     final patientId = _getPatientId(patient);
-    final patientMrn = _getPatientMrn(patient);
+    final patientHistoryNumber = _getPatientHistoryNumber(patient);
 
     print('🏥 Iniciando hospitalización para: ${patient['patient_name']}');
     print('🏥 ID del paciente: $patientId');
-    print('🏥 MRN del paciente: $patientMrn');
+    print('🏥 Historia del paciente: $patientHistoryNumber');
 
     if (patientId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -800,7 +774,6 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
                 'admission_date': DateTime.now().toIso8601String(),
                 'status': 'active',
                 'priority': 'normal',
-                'created_by': _supa.auth.currentUser?.id,
               })
               .select('id')
               .single();
@@ -812,18 +785,16 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
           // Crear nota de ingreso automática (sin column title)
           print('📝 Insertando nota de ingreso...');
           await _supa.from('notes').insert({
-            'patient_id': patientId,
             'hospitalization_id': hospitalizationId,
             'content':
                 'Ingreso a Hospitalización - Paciente ingresado el ${DateTime.now().toString().split(' ')[0]}',
             'note_type': 'admission',
-            'created_by': _supa.auth.currentUser?.id,
           });
           print('📝 Nota de ingreso insertada');
 
           // Crear tarea inicial de evaluación
           print('📝 Insertando tarea de evaluación...');
-          await _supa.from('tasks').insert({
+          await _supa.from('treatments').insert({
             'patient_id': patientId,
             'hospitalization_id': hospitalizationId,
             'title': 'Evaluación Inicial',
@@ -834,7 +805,6 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
             'due_date':
                 DateTime.now().add(Duration(hours: 2)).toIso8601String(),
             'assigned_to': _supa.auth.currentUser?.id,
-            'created_by': _supa.auth.currentUser?.id,
           });
           print('📝 Tarea de evaluación insertada');
 
@@ -848,6 +818,10 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
               backgroundColor: home.AppColors.success500,
             ),
           );
+
+          // Actualizar el stream inmediatamente después de agregar paciente
+          print('🔄 Actualizando stream después de agregar paciente...');
+          _initializeStreams();
         } catch (e) {
           print('❌ Error en hospitalización: $e');
           ScaffoldMessenger.of(context).showSnackBar(
@@ -885,22 +859,19 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
       await _supa.from('hospitalization').update({
         'status': 'discharged',
         'discharge_date': DateTime.now().toIso8601String(),
-        'updated_by': _supa.auth.currentUser?.id,
       }).eq('id', hospitalizationId);
 
       // Crear una nota de alta automática (sin title column)
       await _supa.from('notes').insert({
-        'patient_id': patient.id,
         'hospitalization_id': hospitalizationId,
         'content':
             'Alta Médica - Paciente dado de alta el ${DateTime.now().toString().split(' ')[0]}',
         'note_type': 'discharge',
-        'priority': 'normal',
-        'created_by': _supa.auth.currentUser?.id,
+        'is_important': false,
       });
 
       // Crear una tarea de seguimiento post-alta
-      await _supa.from('tasks').insert({
+      await _supa.from('treatments').insert({
         'patient_id': patient.id,
         'hospitalization_id': hospitalizationId,
         'title': 'Seguimiento Post-Alta',
@@ -909,7 +880,6 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
         'priority': 'normal',
         'due_date': DateTime.now().add(Duration(days: 3)).toIso8601String(),
         'assigned_to': _supa.auth.currentUser?.id,
-        'created_by': _supa.auth.currentUser?.id,
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -918,6 +888,10 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
           backgroundColor: home.AppColors.success500,
         ),
       );
+
+      // Actualizar el stream inmediatamente después del alta
+      print('🔄 Actualizando stream después del alta...');
+      _initializeStreams();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -995,11 +969,10 @@ class _PatientSelectionDialogState extends State<PatientSelectionDialog> {
   }
 
   // Funciones auxiliares estáticas para obtener campos con fallback
-  static String? _getPatientMrn(Map<String, dynamic> patient) {
+  static String? _getPatientHistoryNumber(Map<String, dynamic> patient) {
     return patient['history_number'] ??
-        patient['mrn'] ??
-        patient['patient_mrn'] ??
-        patient['mrn_int']?.toString() ??
+        patient['history_number_snapshot'] ??
+        patient['history_number_int']?.toString() ??
         patient['patient_id'];
   }
 
@@ -1007,9 +980,9 @@ class _PatientSelectionDialogState extends State<PatientSelectionDialog> {
   Widget build(BuildContext context) {
     final filteredPatients = _patients.where((patient) {
       if (_searchQuery.isEmpty) return true;
-      final mrn = _getPatientMrn(patient);
+      final historyNumber = _getPatientHistoryNumber(patient);
       return patient['patient_name']?.toLowerCase().contains(_searchQuery) ||
-          (mrn?.toLowerCase().contains(_searchQuery) ?? false) ||
+          (historyNumber?.toLowerCase().contains(_searchQuery) ?? false) ||
           patient['owner_name']?.toLowerCase().contains(_searchQuery);
     }).toList();
 
@@ -1052,7 +1025,7 @@ class _PatientSelectionDialogState extends State<PatientSelectionDialog> {
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Buscar por nombre, MRN o dueño...',
+                hintText: 'Buscar por nombre, historia o dueño...',
                 prefixIcon: Icon(Iconsax.search_normal, size: 20),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1162,7 +1135,7 @@ class _PatientSelectionDialogState extends State<PatientSelectionDialog> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'MRN: ${_getPatientMrn(patient) ?? 'N/A'}',
+                      'Historia: ${_getPatientHistoryNumber(patient) ?? 'N/A'}',
                       style: TextStyle(
                         fontSize: 12,
                         color: home.AppColors.neutral600,
