@@ -708,7 +708,9 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
 
       // Actualizar el stream de pacientes para reflejar cambios en tareas
       print('🔄 Actualizando stream después de completar tratamiento...');
-      _initializeStreams();
+      setState(() {
+        _initializeStreams();
+      });
     } catch (e) {
       print('Error updating treatment status: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -821,7 +823,9 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
 
           // Actualizar el stream inmediatamente después de agregar paciente
           print('🔄 Actualizando stream después de agregar paciente...');
-          _initializeStreams();
+          setState(() {
+            _initializeStreams();
+          });
         } catch (e) {
           print('❌ Error en hospitalización: $e');
           ScaffoldMessenger.of(context).showSnackBar(
@@ -891,7 +895,9 @@ class _HospitalizacionPanelState extends State<HospitalizacionPanel> {
 
       // Actualizar el stream inmediatamente después del alta
       print('🔄 Actualizando stream después del alta...');
-      _initializeStreams();
+      setState(() {
+        _initializeStreams();
+      });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

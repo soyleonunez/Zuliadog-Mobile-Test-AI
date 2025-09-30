@@ -23,6 +23,7 @@ class AppConfig {
     'medical_records': 'medical_records',
     'billing_docs': 'billing_docs',
     'system_files': 'system_files',
+    'lab_results': 'lab_results',
   };
 
   // =====================================================

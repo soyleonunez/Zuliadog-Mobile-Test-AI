@@ -227,10 +227,6 @@ class HistoryService {
           .eq('patient_id', patientId)
           .order('created_at', ascending: true);
 
-      if (recs.isEmpty) {
-        return [];
-      }
-
       final events = <TimelineEvent>[];
 
       // Agregar eventos de creación de bloques
@@ -253,7 +249,7 @@ class HistoryService {
         }
       }
 
-      // Obtener adjuntos
+      // Obtener adjuntos médicos
       final attachments = await _getAttachmentsForPatient(patientId);
       for (final att in attachments) {
         events.add(TimelineEvent(
@@ -261,6 +257,22 @@ class HistoryService {
           title: 'Archivo adjuntado',
           subtitle: att.name,
           dotColor: const Color(0xFF4F46E5),
+        ));
+      }
+
+      // Obtener documentos de laboratorio
+      final labDocs = await _supa
+          .from('lab_documents')
+          .select('title, file_name, created_at, status')
+          .eq('history_number', patientId)
+          .order('created_at', ascending: true);
+
+      for (final doc in labDocs) {
+        events.add(TimelineEvent(
+          at: DateTime.parse(doc['created_at'] as String),
+          title: 'Resultado de laboratorio',
+          subtitle: '${doc['title'] ?? doc['file_name']} - ${doc['status']}',
+          dotColor: const Color(0xFF10B981), // Verde para laboratorio
         ));
       }
 
@@ -314,7 +326,7 @@ class HistoryService {
   // MÉTODOS DE BÚSQUEDA DE PACIENTES
   // ========================================
 
-  /// Busca pacientes por nombre, history_number o dueño usando v_app
+  /// Busca pacientes por nombre, history_number o dueño usando patients directamente
   Future<List<PatientSearchRow>> searchPatients(String query,
       {int limit = 30}) async {
     try {
@@ -323,30 +335,75 @@ class HistoryService {
 
       final q = query.trim();
 
-      // Usar v_app y misma lógica simple que pacientes.dart
-      var queryBuilder =
-          _supa.from('v_app').select('*').eq('clinic_id', clinicId);
+      // Buscar directamente en patients con JOIN a owners y breeds
+      var queryBuilder = _supa.from('patients').select('''
+            id,
+            name,
+            history_number,
+            species_code,
+            breed_id,
+            breed,
+            sex,
+            birth_date,
+            weight_kg,
+            notes,
+            owner_id,
+            clinic_id,
+            temper,
+            temperature,
+            respiration,
+            pulse,
+            hydration,
+            weight,
+            admission_date,
+            _patient_id,
+            created_at,
+            updated_at,
+            owners:owner_id (
+              name,
+              phone,
+              email
+            ),
+            breeds:breed_id (
+              label,
+              species_code,
+              species_label
+            )
+          ''').eq('clinic_id', clinicId);
 
       if (q.isNotEmpty) {
-        // Usar la misma lógica simple que funciona en pacientes.dart
-        queryBuilder = queryBuilder.or(
-            'patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%');
+        queryBuilder =
+            queryBuilder.or('name.ilike.%$q%,history_number.ilike.%$q%');
       }
 
-      final rows = await queryBuilder
-          .order('patient_name', ascending: true)
-          .limit(limit);
+      final rows =
+          await queryBuilder.order('name', ascending: true).limit(limit);
 
-      // Agrupar por patient_id para evitar duplicados
-      final Map<String, Map<String, dynamic>> uniquePatients = {};
-      for (final record in rows) {
-        final patientId = record['patient_id'] ?? record['patient_uuid'];
-        if (patientId != null && !uniquePatients.containsKey(patientId)) {
-          uniquePatients[patientId] = record;
-        }
-      }
+      // Procesar los resultados para que coincidan con el formato esperado
+      final processedResults = rows.map((record) {
+        final owner = record['owners'] as Map<String, dynamic>?;
+        final breed = record['breeds'] as Map<String, dynamic>?;
 
-      return uniquePatients.values
+        return {
+          'patient_id': record['id'],
+          'patient_uuid': record['id'],
+          'patient_name': record['name'],
+          'history_number': record['history_number'],
+          'species_code': record['species_code'],
+          'breed_id': record['breed_id'],
+          'breed': breed?['label'] ?? record['breed'],
+          'breed_label': breed?['label'] ?? record['breed'],
+          'sex': record['sex'],
+          'birth_date': record['birth_date'],
+          'owner_name': owner?['name'],
+          'owner_phone': owner?['phone'],
+          'owner_email': owner?['email'],
+          'species_label': breed?['species_label'],
+          'patient_breed_id': record['breed_id'],
+        };
+      }).toList();
+
+      return processedResults
           .map((row) => PatientSearchRow.fromJson(row))
           .toList();
     } catch (e) {
@@ -382,20 +439,52 @@ class HistoryService {
     }
   }
 
-  /// Obtiene un paciente por history_number usando v_app
+  /// Obtiene un paciente por history_number usando patients directamente
   Future<PatientSummary?> getPatientSummary(String patientHistoryNumber) async {
     try {
       final clinicId =
           '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203'; // TODO: Obtener del contexto
 
-      // Usar v_app que tiene toda la información necesaria
+      // Buscar directamente en patients con JOIN a owners y breeds
       try {
-        var queryBuilder =
-            _supa.from('v_app').select('*').eq('clinic_id', clinicId);
+        var queryBuilder = _supa.from('patients').select('''
+              id,
+              name,
+              history_number,
+              species_code,
+              breed_id,
+              breed,
+              sex,
+              birth_date,
+              weight_kg,
+              notes,
+              owner_id,
+              clinic_id,
+              temper,
+              temperature,
+              respiration,
+              pulse,
+              hydration,
+              weight,
+              admission_date,
+              _patient_id,
+              created_at,
+              updated_at,
+              owners:owner_id (
+                name,
+                phone,
+                email
+              ),
+              breeds:breed_id (
+                label,
+                species_code,
+                species_label
+              )
+            ''').eq('clinic_id', clinicId);
 
-        // Si parece ser un UUID, buscar por patient_id, sino por history_number
+        // Si parece ser un UUID, buscar por id, sino por history_number
         if (patientHistoryNumber.contains('-')) {
-          queryBuilder = queryBuilder.eq('patient_id', patientHistoryNumber);
+          queryBuilder = queryBuilder.eq('id', patientHistoryNumber);
         } else {
           queryBuilder =
               queryBuilder.eq('history_number', patientHistoryNumber);
@@ -404,9 +493,30 @@ class HistoryService {
         final rows = await queryBuilder.limit(1);
 
         if (rows.isNotEmpty) {
-          final row = rows.first;
+          final record = rows.first;
+          final owner = record['owners'] as Map<String, dynamic>?;
+          final breed = record['breeds'] as Map<String, dynamic>?;
 
-          return PatientSummary.fromJson(row);
+          // Procesar el resultado para que coincida con el formato esperado
+          final processedRecord = {
+            'patient_id': record['id'],
+            'patient_uuid': record['id'],
+            'patient_name': record['name'],
+            'history_number': record['history_number'],
+            'species_code': record['species_code'],
+            'breed_id': record['breed_id'],
+            'breed': breed?['label'] ?? record['breed'],
+            'breed_label': breed?['label'] ?? record['breed'],
+            'sex': record['sex'],
+            'birth_date': record['birth_date'],
+            'owner_name': owner?['name'],
+            'owner_phone': owner?['phone'],
+            'owner_email': owner?['email'],
+            'species_label': breed?['species_label'],
+            'patient_breed_id': record['breed_id'],
+          };
+
+          return PatientSummary.fromJson(processedRecord);
         }
       } catch (e) {}
 
@@ -781,6 +891,110 @@ class HistoryService {
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
       return [];
+    }
+  }
+
+  // ========================================
+  // MÉTODOS DE LABORATORIO
+  // ========================================
+
+  /// Obtiene documentos de laboratorio de un paciente por history_number
+  Future<List<Map<String, dynamic>>> getLabDocumentsByHistoryNumber({
+    required String clinicId,
+    required String historyNumber,
+  }) async {
+    try {
+      final rows = await _supa
+          .from('lab_documents')
+          .select('*')
+          .eq('clinic_id', clinicId)
+          .eq('history_number', historyNumber)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(rows);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Obtiene todos los documentos (médicos + laboratorio) de un paciente
+  Future<List<Map<String, dynamic>>> getAllDocumentsByHistoryNumber({
+    required String clinicId,
+    required String historyNumber,
+  }) async {
+    try {
+      final allDocuments = <Map<String, dynamic>>[];
+
+      // Obtener documentos médicos
+      final medicalDocs = await _supa
+          .from('documents')
+          .select('*')
+          .eq('clinic_id', clinicId)
+          .eq('record_id', historyNumber);
+
+      // Obtener documentos de laboratorio
+      final labDocs = await _supa
+          .from('lab_documents')
+          .select('*')
+          .eq('clinic_id', clinicId)
+          .eq('history_number', historyNumber);
+
+      // Agregar documentos médicos
+      for (final doc in medicalDocs) {
+        allDocuments.add({
+          ...doc,
+          'source': 'medical',
+          'type': 'documento_medico',
+        });
+      }
+
+      // Agregar documentos de laboratorio
+      for (final doc in labDocs) {
+        allDocuments.add({
+          ...doc,
+          'source': 'laboratorio',
+          'type': 'documento_laboratorio',
+          'file_name': doc['file_name'],
+          'file_path': doc['file_path'],
+          'file_size': doc['file_size'] ?? 0,
+          'file_type': doc['file_type'],
+          'uploaded_at': doc['created_at'],
+        });
+      }
+
+      // Ordenar por fecha de creación (más reciente primero)
+      allDocuments.sort((a, b) {
+        final dateA =
+            DateTime.tryParse(a['uploaded_at'] ?? a['created_at'] ?? '') ??
+                DateTime(1900);
+        final dateB =
+            DateTime.tryParse(b['uploaded_at'] ?? b['created_at'] ?? '') ??
+                DateTime(1900);
+        return dateB.compareTo(dateA);
+      });
+
+      return allDocuments;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Obtiene la URL pública de un documento de laboratorio
+  String getLabDocumentUrl(String filePath) {
+    return _supa.storage.from('lab_results').getPublicUrl(filePath);
+  }
+
+  /// Obtiene la URL pública de un documento médico
+  String getMedicalDocumentUrl(String filePath) {
+    return _supa.storage.from('medical_files').getPublicUrl(filePath);
+  }
+
+  /// Obtiene la URL pública de cualquier documento según su tipo
+  String getDocumentUrl(Map<String, dynamic> document) {
+    if (document['source'] == 'laboratorio') {
+      return getLabDocumentUrl(document['file_path']);
+    } else {
+      return getMedicalDocumentUrl(document['file_path']);
     }
   }
 }

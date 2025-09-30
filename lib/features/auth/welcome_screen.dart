@@ -70,6 +70,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
+    final screenSize = MediaQuery.of(context).size;
+    final isMaximized = screenSize.width > 1200; // Detectar si está maximizado
+    final isSmallScreen = screenSize.width < 800; // Detectar pantallas pequeñas
 
     return Scaffold(
       body: Container(
@@ -85,12 +88,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         ),
         child: Stack(
           children: [
-            // CONTENIDO PRINCIPAL - POSICIONAMIENTO DESDE ABAJO
+            // CONTENIDO PRINCIPAL - POSICIONAMIENTO RESPONSIVE MEJORADO
             Positioned(
-              bottom:
-                  138, // PADDING INFERIOR: Cambia este valor para subir/bajar el contenido
-              left: 0,
-              right: 0,
+              bottom: isMaximized
+                  ? 220 // Vista maximizada: más espacio desde abajo
+                  : isSmallScreen
+                      ? 120 // Vista pequeña: menos espacio
+                      : 150, // Vista normal: espacio intermedio
+              left: isMaximized ? 80 : 40, // Padding horizontal responsivo
+              right: isMaximized ? 80 : 40,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -100,32 +106,35 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     style: t.headlineLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
-                      fontSize: 24, // TAMAÑO DE TÍTULO: Ajusta según necesites
+                      fontSize: isMaximized
+                          ? 32 // Vista maximizada: texto más grande
+                          : isSmallScreen
+                              ? 20 // Vista pequeña: texto más pequeño
+                              : 24, // Vista normal
                     ),
                     textAlign: TextAlign.center,
                   ),
 
                   // ESPACIADO ENTRE TÍTULO Y SUBTÍTULO
-                  const SizedBox(
-                      height:
-                          1), // ESPACIADO TÍTULO-SUBTÍTULO: Cambia este valor
+                  SizedBox(height: isMaximized ? 8 : 4),
 
                   // SUBTÍTULO
                   Text(
                     'de gestión veterinaria.',
                     style: t.bodyLarge?.copyWith(
                       color: Colors.black,
-                      fontSize:
-                          14, // TAMAÑO DE SUBTÍTULO: Ajusta según necesites
+                      fontSize: isMaximized
+                          ? 18 // Vista maximizada: texto más grande
+                          : isSmallScreen
+                              ? 12 // Vista pequeña: texto más pequeño
+                              : 14, // Vista normal
                       fontWeight: FontWeight.normal,
                     ),
                     textAlign: TextAlign.center,
                   ),
 
                   // ESPACIADO ENTRE SUBTÍTULO Y BOTÓN
-                  const SizedBox(
-                      height:
-                          10), // ESPACIADO SUBTÍTULO-BOTÓN: Cambia este valor
+                  SizedBox(height: isMaximized ? 20 : 16),
 
                   // BOTÓN PRINCIPAL "INGRESAR" - FONDO NEGRO CON ICONO OUTLINE Y ANIMACIÓN
                   AnimatedBuilder(
@@ -134,19 +143,36 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       return Transform.scale(
                         scale: _buttonScale.value,
                         child: Container(
-                          height: 40, // ALTURA DEL BOTÓN: Cambia este valor
-                          padding: const EdgeInsets.symmetric(
-                              horizontal:
-                                  24), // PADDING HORIZONTAL DEL BOTÓN: Cambia este valor
+                          height: isMaximized
+                              ? 50 // Vista maximizada: botón más alto
+                              : isSmallScreen
+                                  ? 36 // Vista pequeña: botón más pequeño
+                                  : 42, // Vista normal
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isMaximized
+                                ? 32 // Vista maximizada: más padding horizontal
+                                : isSmallScreen
+                                    ? 20 // Vista pequeña: menos padding
+                                    : 26, // Vista normal
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black, // FONDO NEGRO
                             borderRadius: BorderRadius.circular(
-                                20), // BORDES REDONDOS DEL BOTÓN: Cambia este valor
+                                isMaximized ? 25 : 20 // Radio responsivo
+                                ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: isMaximized ? 12 : 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
                           child: Material(
                             color: Colors.transparent,
                             child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius:
+                                  BorderRadius.circular(isMaximized ? 25 : 20),
                               onTap: () => _goToHome(context),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -156,18 +182,22 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     style: t.titleMedium?.copyWith(
                                       fontWeight: FontWeight.w600,
                                       color: Colors.white, // TEXTO BLANCO
-                                      fontSize:
-                                          12, // TAMAÑO DEL TEXTO DEL BOTÓN: Cambia este valor
+                                      fontSize: isMaximized
+                                          ? 16 // Vista maximizada: texto más grande
+                                          : isSmallScreen
+                                              ? 12 // Vista pequeña: texto más pequeño
+                                              : 14, // Vista normal
                                     ),
                                   ),
-                                  const SizedBox(
-                                      width:
-                                          6), // ESPACIADO TEXTO-ICONO: Cambia este valor
-                                  const Icon(
+                                  SizedBox(width: isMaximized ? 8 : 6),
+                                  Icon(
                                     Iconsax.login,
                                     color: Colors.white, // ICONO BLANCO OUTLINE
-                                    size:
-                                        16, // TAMAÑO DEL ICONO: Cambia este valor
+                                    size: isMaximized
+                                        ? 20 // Vista maximizada: icono más grande
+                                        : isSmallScreen
+                                            ? 14 // Vista pequeña: icono más pequeño
+                                            : 16, // Vista normal
                                   ),
                                 ],
                               ),
@@ -181,12 +211,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
             ),
 
-            // BOTÓN DE TUTORIAL - POSICIONAMIENTO DESDE ABAJO Y DERECHA CON ANIMACIÓN
+            // BOTÓN DE TUTORIAL - POSICIONAMIENTO RESPONSIVE MEJORADO
             Positioned(
-              bottom:
-                  145, // PADDING INFERIOR: Mismo valor que el contenido principal
-              right:
-                  35, // PADDING DERECHO: Cambia este valor para alejar/acercar del borde
+              bottom: isMaximized
+                  ? 230 // Vista maximizada: más espacio desde abajo
+                  : isSmallScreen
+                      ? 130 // Vista pequeña: menos espacio
+                      : 160, // Vista normal
+              right: isMaximized
+                  ? 100 // Vista maximizada: más espacio del borde
+                  : isSmallScreen
+                      ? 20 // Vista pequeña: menos espacio
+                      : 50, // Vista normal
               child: GestureDetector(
                 onTap: () => _goToTutorial(context),
                 child: AnimatedBuilder(
@@ -195,28 +231,35 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     return Transform.scale(
                       scale: _tutorialScale.value,
                       child: Container(
-                        width:
-                            40, // ANCHO DEL BOTÓN DE TUTORIAL: Cambia este valor
-                        height:
-                            40, // ALTO DEL BOTÓN DE TUTORIAL: Cambia este valor
+                        width: isMaximized
+                            ? 50 // Vista maximizada: botón más grande
+                            : isSmallScreen
+                                ? 35 // Vista pequeña: botón más pequeño
+                                : 42, // Vista normal
+                        height: isMaximized
+                            ? 50 // Vista maximizada: botón más grande
+                            : isSmallScreen
+                                ? 35 // Vista pequeña: botón más pequeño
+                                : 42, // Vista normal
                         decoration: BoxDecoration(
                           color: Colors.blue.withOpacity(0.8),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius:
-                                  8, // DESENFOQUE DE LA SOMBRA: Cambia este valor
-                              offset: const Offset(0,
-                                  4), // DESPLAZAMIENTO DE LA SOMBRA: Cambia este valor
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: isMaximized ? 10 : 8,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Iconsax.info_circle,
                           color: Colors.white,
-                          size:
-                              20, // TAMAÑO DEL ICONO DE TUTORIAL: Cambia este valor
+                          size: isMaximized
+                              ? 24 // Vista maximizada: icono más grande
+                              : isSmallScreen
+                                  ? 18 // Vista pequeña: icono más pequeño
+                                  : 20, // Vista normal
                         ),
                       ),
                     );

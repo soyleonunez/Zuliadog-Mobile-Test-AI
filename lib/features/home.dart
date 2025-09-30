@@ -39,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool loading = true;
   bool useRealChart =
       false; // reemplaza placeholder cuando integres tu librería de charts
-  RangeWeeks _range = RangeWeeks.w4;
   final String _currentRoute = 'frame_home';
 
   // Variables para el buscador integrado
@@ -60,6 +59,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) setState(() => loading = false);
     });
+  }
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // No necesitamos hacer nada aquí porque _ImportantSection maneja su propia carga
   }
 
   Future<void> _loadClinicId() async {
@@ -243,9 +248,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         const SizedBox(height: 16),
                                         _WeeklyPerformanceCard(
                                           loading: loading,
-                                          range: _range,
-                                          onRangeChanged: (r) =>
-                                              setState(() => _range = r),
                                           useRealChart: useRealChart,
                                         ),
                                         const SizedBox(height: 16),
@@ -1073,22 +1075,22 @@ class _QuickActionsSection extends StatelessWidget {
         onTap: onNewPatient,
       ),
       _QuickAction(
-        icon: Iconsax.calendar_add,
-        label: 'Nueva Cita',
+        icon: Iconsax.add_circle,
+        label: 'Crear Orden Lab',
         color: AppColors.success500,
-        onTap: () {},
+        onTap: () => _showCreateLabOrder(context),
       ),
       _QuickAction(
         icon: Iconsax.document_upload,
         label: 'Subir Documento',
         color: AppColors.warning500,
-        onTap: () {},
+        onTap: () => _showUploadDocument(context),
       ),
       _QuickAction(
-        icon: Iconsax.receipt_2,
-        label: 'Crear Ticket',
+        icon: Iconsax.document_text,
+        label: 'Ver Reportes',
         color: AppColors.danger500,
-        onTap: () {},
+        onTap: () => _showLabReports(context),
       ),
     ];
 
@@ -1115,6 +1117,28 @@ class _QuickActionsSection extends StatelessWidget {
       ),
     );
   }
+}
+
+// Métodos para las nuevas acciones rápidas
+void _showCreateLabOrder(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (context) => _CreateLabOrderDialog(),
+  );
+}
+
+void _showUploadDocument(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (context) => _UploadDocumentDialog(),
+  );
+}
+
+void _showLabReports(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (context) => _LabReportsDialog(),
+  );
 }
 
 class _QuickAction {
@@ -1291,42 +1315,6 @@ class _WelcomeHeader extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Botón de exportar
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.success500.withOpacity(.2),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        // Aquí irá la lógica para exportar datos
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AppColors.success500,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Iconsax.export_2,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ],
@@ -1339,31 +1327,122 @@ class _WelcomeHeader extends StatelessWidget {
 /// =======================
 /// Importantes – solo números (ultra compactos)
 /// =======================
-class _ImportantSection extends StatelessWidget {
+class _ImportantSection extends StatefulWidget {
   final bool loading;
   const _ImportantSection({required this.loading});
+
+  @override
+  State<_ImportantSection> createState() => _ImportantSectionState();
+}
+
+class _ImportantSectionState extends State<_ImportantSection> {
+  int _attendedToday = 0;
+  int _pending = 0;
+  int _notes = 0;
+  bool _isLoadingKPI = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadKPIData();
+  }
+
+  @override
+  void didUpdateWidget(_ImportantSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Recargar datos cuando loading cambie de true a false
+    if (oldWidget.loading && !widget.loading) {
+      _loadKPIData();
+    }
+  }
+
+  Future<void> _loadKPIData() async {
+    print('🔄 Cargando datos KPI... loading: ${widget.loading}');
+
+    if (widget.loading) {
+      print('⏸️ Saltando carga KPI porque loading es true');
+      return;
+    }
+
+    setState(() {
+      _isLoadingKPI = true;
+    });
+
+    try {
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final todayEnd = todayStart.add(const Duration(days: 1));
+
+      print(
+          '📅 Fechas: ${todayStart.toIso8601String()} - ${todayEnd.toIso8601String()}');
+
+      // 1. Obtener órdenes de laboratorio creadas hoy
+      print('🔬 Consultando órdenes de laboratorio...');
+      final labOrdersResponse = await Supabase.instance.client
+          .from('lab_documents')
+          .select('id')
+          .eq('clinic_id', '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203')
+          .gte('created_at', todayStart.toIso8601String())
+          .lt('created_at', todayEnd.toIso8601String());
+
+      // 2. Obtener pacientes atendidos hoy (registros médicos)
+      print('🏥 Consultando registros médicos...');
+      final attendedResponse = await Supabase.instance.client
+          .from('medical_records')
+          .select('id')
+          .eq('clinic_id', '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203')
+          .gte('created_at', todayStart.toIso8601String())
+          .lt('created_at', todayEnd.toIso8601String());
+
+      // 3. Obtener pacientes hospitalizados actualmente
+      print('🏥 Consultando hospitalizaciones...');
+      final hospitalizedResponse = await Supabase.instance.client
+          .from('hospitalization')
+          .select('id')
+          .eq('clinic_id', '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203')
+          .isFilter(
+              'discharge_date', null); // Sin fecha de alta = aún hospitalizado
+
+      print('📊 Resultados:');
+      print('  - Órdenes Lab: ${labOrdersResponse.length}');
+      print('  - Atendidos: ${attendedResponse.length}');
+      print('  - Hospitalizados: ${hospitalizedResponse.length}');
+
+      setState(() {
+        _attendedToday = attendedResponse.length;
+        _pending = labOrdersResponse.length; // Cambiar a órdenes de lab
+        _notes = hospitalizedResponse.length; // Cambiar a hospitalizados
+        _isLoadingKPI = false;
+      });
+    } catch (e) {
+      print('❌ Error cargando datos KPI: $e');
+      setState(() {
+        _isLoadingKPI = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final items = [
       ImportantItem(
         title: 'Atendidos hoy',
-        value: '18',
+        value: _isLoadingKPI ? '...' : _attendedToday.toString(),
         icon: Iconsax.health,
         color: AppColors.success500,
         backgroundColor: AppColors.success500.withOpacity(0.1),
       ),
       ImportantItem(
-        title: 'Pendientes',
-        value: '7',
-        icon: Iconsax.clock,
+        title: 'Órdenes Lab',
+        value: _isLoadingKPI ? '...' : _pending.toString(),
+        icon: Iconsax.document_text,
         color: AppColors.warning500,
         backgroundColor: AppColors.warning500.withOpacity(0.1),
       ),
       ImportantItem(
-        title: 'Notas',
-        value: '3',
-        icon: Iconsax.note_2,
+        title: 'Hospitalizados',
+        value: _isLoadingKPI ? '...' : _notes.toString(),
+        icon: Iconsax.hospital,
         color: AppColors.primary500,
         backgroundColor: AppColors.primary500.withOpacity(0.1),
       ),
@@ -1376,7 +1455,7 @@ class _ImportantSection extends StatelessWidget {
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
-              child: loading
+              child: widget.loading
                   ? const _Skeleton(height: 80)
                   : _ImportantCard(item: it),
             ),
@@ -1449,19 +1528,101 @@ class _ImportantCard extends StatelessWidget {
 /// =======================
 /// Rendimiento semanal (Chart placeholder)
 /// =======================
-enum RangeWeeks { w4, w12 }
 
-class _WeeklyPerformanceCard extends StatelessWidget {
+class _WeeklyPerformanceCard extends StatefulWidget {
   final bool loading;
-  final RangeWeeks range;
-  final ValueChanged<RangeWeeks> onRangeChanged;
   final bool useRealChart;
   const _WeeklyPerformanceCard({
     required this.loading,
-    required this.range,
-    required this.onRangeChanged,
     required this.useRealChart,
   });
+
+  @override
+  State<_WeeklyPerformanceCard> createState() => _WeeklyPerformanceCardState();
+}
+
+class _WeeklyPerformanceCardState extends State<_WeeklyPerformanceCard> {
+  List<Map<String, dynamic>> _weeklyData = [];
+  bool _isLoadingData = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWeeklyData();
+  }
+
+  // Ya no necesitamos didUpdateWidget porque no hay cambios de rango
+
+  Future<void> _loadWeeklyData() async {
+    setState(() {
+      _isLoadingData = true;
+    });
+
+    try {
+      final now = DateTime.now();
+      final daysToShow = 7; // Solo vista semanal
+      final startDate = now.subtract(Duration(days: daysToShow - 1));
+
+      // Consultar pacientes atendidos por día
+      final response = await Supabase.instance.client
+          .from('medical_records')
+          .select('created_at')
+          .eq('clinic_id', '4c17fddf-24ab-4a8d-9343-4cc4f6a4a203')
+          .gte('created_at', startDate.toIso8601String())
+          .order('created_at', ascending: true);
+
+      // Procesar datos por día
+      Map<String, int> dailyCounts = {};
+      for (int i = 0; i < daysToShow; i++) {
+        final date = startDate.add(Duration(days: i));
+        final dateKey = '${date.day}/${date.month}';
+        dailyCounts[dateKey] = 0;
+      }
+
+      // Contar pacientes por día
+      for (final record in response) {
+        final createdAt = DateTime.parse(record['created_at']);
+        final dateKey = '${createdAt.day}/${createdAt.month}';
+        if (dailyCounts.containsKey(dateKey)) {
+          dailyCounts[dateKey] = (dailyCounts[dateKey] ?? 0) + 1;
+        }
+      }
+
+      // Convertir a lista para el gráfico, ordenada por fecha
+      final sortedEntries = dailyCounts.entries.toList()
+        ..sort((a, b) {
+          final aDate = a.key.split('/');
+          final bDate = b.key.split('/');
+          final aDay = int.parse(aDate[0]);
+          final bDay = int.parse(bDate[0]);
+          return aDay.compareTo(bDay);
+        });
+
+      _weeklyData = sortedEntries.map((entry) {
+        return {
+          'day': entry.key,
+          'count': entry.value,
+        };
+      }).toList();
+
+      setState(() {
+        _isLoadingData = false;
+      });
+    } catch (e) {
+      print('Error cargando datos semanales: $e');
+      // En caso de error, mostrar datos de ejemplo
+      _weeklyData = List.generate(7, (index) {
+        final date = DateTime.now().subtract(Duration(days: 6 - index));
+        return {
+          'day': '${date.day}/${date.month}',
+          'count': (index % 3) + 1, // Datos de ejemplo
+        };
+      });
+      setState(() {
+        _isLoadingData = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1478,15 +1639,15 @@ class _WeeklyPerformanceCard extends StatelessWidget {
               children: [
                 Text('Rendimiento semanal', style: AppText.titleS),
                 const Spacer(),
-                _RangeSelector(range: range, onChanged: onRangeChanged),
+                // Quitamos el selector de rango
               ],
             ),
             const SizedBox(height: 8),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
-              child: loading
+              child: widget.loading || _isLoadingData
                   ? const _Skeleton(height: 220)
-                  : const _ChartPlaceholder(),
+                  : _WeeklyChart(data: _weeklyData),
             ),
           ],
         ),
@@ -1495,89 +1656,151 @@ class _WeeklyPerformanceCard extends StatelessWidget {
   }
 }
 
-class _ChartPlaceholder extends StatelessWidget {
-  const _ChartPlaceholder();
+class _WeeklyChart extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+
+  const _WeeklyChart({
+    required this.data,
+  });
+
   @override
   Widget build(BuildContext context) {
+    if (data.isEmpty) {
+      return Container(
+        height: 260,
+        decoration: BoxDecoration(
+          color: AppColors.neutral50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.neutral200),
+        ),
+        child: const Center(
+          child: Text('No hay datos disponibles', style: AppText.bodyS),
+        ),
+      );
+    }
+
+    final maxValue =
+        data.map((e) => e['count'] as int).reduce((a, b) => a > b ? a : b);
+    // final chartHeight = 200.0; // Removido ya que no se usa
+    final barWidth = 40.0; // Barras fijas para vista semanal
+    final spacing = 8.0; // Espaciado fijo para vista semanal
+
     return Container(
-      height: 260,
+      constraints: const BoxConstraints(
+        minHeight: 200,
+        maxHeight: 300,
+      ),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.neutral50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.neutral200),
       ),
-      child: const Center(
-        child: Text('Gráfico semanal (placeholder)', style: AppText.bodyS),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Título del gráfico
+          Row(
+            children: [
+              Icon(Iconsax.chart_2, size: 16, color: AppColors.primary600),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Pacientes atendidos esta semana',
+                  style: AppText.bodyS.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.neutral700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Total: ${data.fold(0, (sum, item) => sum + (item['count'] as int))}',
+                style: AppText.bodyS.copyWith(
+                  color: AppColors.primary600,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Gráfico de barras con altura fija para evitar overflow
+          SizedBox(
+            height: 180,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: data.map((item) {
+                  final count = item['count'] as int;
+                  final height = maxValue > 0
+                      ? (count / maxValue) * 120
+                      : 0.0; // Reducir altura máxima
+
+                  return Container(
+                    margin: EdgeInsets.only(right: spacing),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        // Valor en la parte superior
+                        Text(
+                          count.toString(),
+                          style: AppText.bodyS.copyWith(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.neutral600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+
+                        // Barra
+                        Container(
+                          width: barWidth,
+                          height: height,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary500,
+                            borderRadius: BorderRadius.circular(4),
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                AppColors.primary500,
+                                AppColors.primary600,
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Etiqueta del día
+                        SizedBox(
+                          width: barWidth + spacing,
+                          child: Text(
+                            item['day'],
+                            style: AppText.bodyS.copyWith(
+                              fontSize: 10,
+                              color: AppColors.neutral500,
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _RangeSelector extends StatelessWidget {
-  final RangeWeeks range;
-  final ValueChanged<RangeWeeks> onChanged;
-  const _RangeSelector({required this.range, required this.onChanged});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(
-        minWidth: 250,
-      ), // Ampliar espacio horizontal
-      child: SegmentedButton<RangeWeeks>(
-        segments: const [
-          ButtonSegment(
-            value: RangeWeeks.w4,
-            label: Text('Semana'),
-            icon: Icon(Iconsax.calendar_1, size: 16),
-          ),
-          ButtonSegment(
-            value: RangeWeeks.w12,
-            label: Text('Mes'),
-            icon: Icon(Iconsax.calendar_2, size: 16),
-          ),
-        ],
-        selected: {range},
-        showSelectedIcon: false,
-        onSelectionChanged: (s) => onChanged(s.first),
-        style: ButtonStyle(
-          visualDensity: VisualDensity.compact,
-          backgroundColor: WidgetStateProperty.resolveWith<Color?>((
-            Set<WidgetState> states,
-          ) {
-            if (states.contains(WidgetState.selected)) {
-              return AppColors.primary500.withOpacity(
-                0.12,
-              ); // Fondo sutil solo para seleccionado
-            }
-            return Colors.transparent; // Sin fondo para no seleccionado
-          }),
-          foregroundColor: WidgetStateProperty.resolveWith<Color?>((
-            Set<WidgetState> states,
-          ) {
-            if (states.contains(WidgetState.selected)) {
-              return AppColors.primary600;
-            }
-            return AppColors.neutral600;
-          }),
-          side: WidgetStateProperty.resolveWith<BorderSide?>((
-            Set<WidgetState> states,
-          ) {
-            if (states.contains(WidgetState.selected)) {
-              return BorderSide(
-                color: AppColors.primary500.withOpacity(0.3),
-                width: 1,
-              );
-            }
-            return BorderSide(color: AppColors.neutral200, width: 1);
-          }),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// Clase _RangeSelector eliminada - ya no se necesita
 
 /// =======================
 /// Actividad reciente (tabla 8) — alineación TOP + pills cortos
@@ -2197,4 +2420,224 @@ class AppText {
     fontWeight: FontWeight.w600,
     color: AppColors.neutral900,
   );
+}
+
+// =======================
+// Diálogos para las nuevas acciones rápidas
+// =======================
+
+class _CreateLabOrderDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Icon(Iconsax.add_circle, color: AppColors.success500, size: 20),
+          const SizedBox(width: 12),
+          Text('Crear Orden de Laboratorio'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Crear una nueva orden de laboratorio para un paciente.',
+            style: AppText.bodyS.copyWith(color: AppColors.neutral600),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Funcionalidades:',
+            style: AppText.bodyS.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          _buildFeatureItem('Buscar paciente por nombre o historia'),
+          _buildFeatureItem('Especificar pruebas solicitadas'),
+          _buildFeatureItem('Asignar veterinario responsable'),
+          _buildFeatureItem('Agregar notas adicionales'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Cerrar'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            // Navegar a laboratorio
+            NavigationHelper.navigateToRoute(context, LaboratorioPage.route);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.success500,
+            foregroundColor: Colors.white,
+          ),
+          child: Text('Ir a Laboratorio'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(Icons.check, size: 14, color: AppColors.success500),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: AppText.bodyS.copyWith(color: AppColors.neutral600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadDocumentDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Icon(Iconsax.document_upload, color: AppColors.warning500, size: 20),
+          const SizedBox(width: 12),
+          Text('Subir Documento'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Subir documentos médicos para pacientes.',
+            style: AppText.bodyS.copyWith(color: AppColors.neutral600),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Funcionalidades:',
+            style: AppText.bodyS.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          _buildFeatureItem('Buscar paciente por nombre o historia'),
+          _buildFeatureItem('Arrastrar y soltar archivos'),
+          _buildFeatureItem('Soporte para PDF, imágenes y documentos'),
+          _buildFeatureItem('Asociar con pruebas de laboratorio'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Cerrar'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            // Navegar a laboratorio
+            NavigationHelper.navigateToRoute(context, LaboratorioPage.route);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.warning500,
+            foregroundColor: Colors.white,
+          ),
+          child: Text('Ir a Laboratorio'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(Icons.check, size: 14, color: AppColors.success500),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: AppText.bodyS.copyWith(color: AppColors.neutral600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LabReportsDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Icon(Iconsax.document_text, color: AppColors.danger500, size: 20),
+          const SizedBox(width: 12),
+          Text('Ver Reportes de Laboratorio'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Acceder a reportes y documentos de laboratorio.',
+            style: AppText.bodyS.copyWith(color: AppColors.neutral600),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Funcionalidades:',
+            style: AppText.bodyS.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          _buildFeatureItem('Buscar reportes por paciente o fecha'),
+          _buildFeatureItem('Ver estado de órdenes de laboratorio'),
+          _buildFeatureItem('Descargar documentos'),
+          _buildFeatureItem('Filtrar por estado y veterinario'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Cerrar'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            // Navegar a laboratorio
+            NavigationHelper.navigateToRoute(context, LaboratorioPage.route);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.danger500,
+            foregroundColor: Colors.white,
+          ),
+          child: Text('Ir a Laboratorio'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(Icons.check, size: 14, color: AppColors.success500),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: AppText.bodyS.copyWith(color: AppColors.neutral600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

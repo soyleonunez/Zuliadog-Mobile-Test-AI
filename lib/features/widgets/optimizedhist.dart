@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:zuliadog/core/theme.dart';
 import 'package:zuliadog/core/notifications.dart';
@@ -135,16 +133,71 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     }
 
     try {
-      // Usar v_app para obtener información completa del paciente
+      // Buscar directamente en patients con JOIN a owners y breeds
       final rows = await _supa
-          .from('v_app')
-          .select('*')
+          .from('patients')
+          .select('''
+            id,
+            name,
+            history_number,
+            species_code,
+            breed_id,
+            breed,
+            sex,
+            birth_date,
+            weight_kg,
+            notes,
+            owner_id,
+            clinic_id,
+            temper,
+            temperature,
+            respiration,
+            pulse,
+            hydration,
+            weight,
+            admission_date,
+            _patient_id,
+            created_at,
+            updated_at,
+            owners:owner_id (
+              name,
+              phone,
+              email
+            ),
+            breeds:breed_id (
+              label,
+              species_code,
+              species_label
+            )
+          ''')
           .eq('clinic_id', _clinicId!)
           .eq('history_number', _currentHistoryNumber!)
           .limit(1);
 
       if (rows.isNotEmpty) {
-        final patient = Map<String, dynamic>.from(rows.first);
+        final record = rows.first;
+        final owner = record['owners'] as Map<String, dynamic>?;
+        final breed = record['breeds'] as Map<String, dynamic>?;
+
+        // Procesar el resultado para que coincida con el formato esperado
+        final patient = {
+          'patient_id': record['id'],
+          'patient_uuid': record['id'],
+          'patient_name': record['name'],
+          'history_number': record['history_number'],
+          'species_code': record['species_code'],
+          'breed_id': record['breed_id'],
+          'breed': breed?['label'] ?? record['breed'],
+          'breed_label': breed?['label'] ?? record['breed'],
+          'sex': record['sex'],
+          'birth_date': record['birth_date'],
+          'owner_name': owner?['name'],
+          'owner_phone': owner?['phone'],
+          'owner_email': owner?['email'],
+          'species_label': breed?['species_label'],
+          'patient_breed_id': record['breed_id'],
+        };
+
         return patient;
       }
       return null;
@@ -224,27 +277,73 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     try {
       final q = query.trim();
 
-      // Ejecutar búsqueda en v_app usando misma lógica simple que pacientes.dart
+      // Buscar directamente en patients con JOIN a owners y breeds
       final results = await _supa
-          .from('v_app')
-          .select('*')
+          .from('patients')
+          .select('''
+            id,
+            name,
+            history_number,
+            species_code,
+            breed_id,
+            breed,
+            sex,
+            birth_date,
+            weight_kg,
+            notes,
+            owner_id,
+            clinic_id,
+            temper,
+            temperature,
+            respiration,
+            pulse,
+            hydration,
+            weight,
+            admission_date,
+            _patient_id,
+            created_at,
+            updated_at,
+            owners:owner_id (
+              name,
+              phone,
+              email
+            ),
+            breeds:breed_id (
+              label,
+              species_code,
+              species_label
+            )
+          ''')
           .eq('clinic_id', _clinicId!)
-          .or(
-            'patient_name.ilike.%$q%,history_number.ilike.%$q%,owner_name.ilike.%$q%',
-          )
+          .or('name.ilike.%$q%,history_number.ilike.%$q%')
           .limit(10);
 
-      // Agrupar por patient_id para evitar duplicados
-      final Map<String, Map<String, dynamic>> uniquePatients = {};
-      for (final record in results) {
-        final patientId = record['patient_id'] ?? record['patient_uuid'];
-        if (patientId != null && !uniquePatients.containsKey(patientId)) {
-          uniquePatients[patientId] = record;
-        }
-      }
+      // Procesar los resultados para que coincidan con el formato esperado
+      final processedResults = results.map((record) {
+        final owner = record['owners'] as Map<String, dynamic>?;
+        final breed = record['breeds'] as Map<String, dynamic>?;
+
+        return {
+          'patient_id': record['id'],
+          'patient_uuid': record['id'],
+          'patient_name': record['name'],
+          'history_number': record['history_number'],
+          'species_code': record['species_code'],
+          'breed_id': record['breed_id'],
+          'breed': breed?['label'] ?? record['breed'],
+          'breed_label': breed?['label'] ?? record['breed'],
+          'sex': record['sex'],
+          'birth_date': record['birth_date'],
+          'owner_name': owner?['name'],
+          'owner_phone': owner?['phone'],
+          'owner_email': owner?['email'],
+          'species_label': breed?['species_label'],
+          'patient_breed_id': record['breed_id'],
+        };
+      }).toList();
 
       setState(() {
-        _searchResults = uniquePatients.values.toList();
+        _searchResults = processedResults;
         _isSearching = false;
       });
     } catch (e) {
@@ -301,45 +400,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     }
   }
 
-  void _openHistoryEditor({Map<String, dynamic>? record}) {
-    // Verificar que hay un paciente seleccionado
-    if (_currentHistoryNumber == null) {
-      NotificationService.showWarning('Primero selecciona un paciente');
-      return;
-    }
-
-    try {
-      showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.white,
-        builder: (BuildContext context) => _HistoryEditor(
-          clinicId: _clinicId!,
-          historyNumber: _currentHistoryNumber!,
-          record: record,
-        ),
-      ).then((saved) {
-        if (mounted && saved == true) {
-          setState(() {
-            _future = _fetchHistories();
-          });
-          NotificationService.showSuccess(
-            'Bloque de historia creado correctamente',
-          );
-        }
-      }).catchError((error) {
-        if (mounted) {
-          NotificationService.showError('Error al abrir el editor: $error');
-        }
-      });
-    } catch (e) {
-      if (mounted) {
-        NotificationService.showError('Error al abrir el editor: $e');
-      }
-    }
-  }
-
   void _exportHistory() {
     // TODO: Implementar exportación de historia
     ScaffoldMessenger.of(context).showSnackBar(
@@ -357,12 +417,39 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ModernPatientForm(
-          onPatientCreated: () {
+          onPatientCreated: () async {
             // Callback cuando se crea un paciente exitosamente
             Navigator.of(context).pop();
             NotificationService.showSuccess('Paciente creado exitosamente');
-            // Recargar datos si es necesario
-            _loadData();
+
+            // Obtener el último paciente creado para seleccionarlo automáticamente
+            try {
+              final lastPatient = await _supa
+                  .from('v_app')
+                  .select('*')
+                  .eq('clinic_id', _clinicId!)
+                  .order('created_at', ascending: false)
+                  .limit(1)
+                  .single();
+
+              if (lastPatient.isNotEmpty) {
+                setState(() {
+                  _currentHistoryNumber =
+                      lastPatient['history_number']?.toString();
+                  _searchResults = [];
+                  _searchController.clear();
+                });
+
+                // Cargar datos del nuevo paciente
+                _loadData();
+
+                // Crear automáticamente un nuevo bloque de historia
+                await _createNewBlock();
+              }
+            } catch (e) {
+              // Si no se puede obtener el último paciente, solo recargar datos
+              _loadData();
+            }
           },
           onCancel: () {
             // Callback cuando se cancela la creación
@@ -439,21 +526,12 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
             const SizedBox(height: 8),
             const Text('Crea la primera historia médica para este paciente'),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _openHistoryEditor(),
-              icon: const Icon(Iconsax.add, size: 20),
-              label: const Text('Crear Primera Historia'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary500,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
+            _buildQuickActionButton(
+              icon: Iconsax.add,
+              text: 'Crear Primera Historia',
+              tooltip: 'Crear Primera Historia',
+              color: AppTheme.primary500,
+              onTap: () => _createNewBlock(),
             ),
           ],
         ),
@@ -477,14 +555,16 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
                   recordId: item['id'],
                   clinicId: _clinicId!,
                   dateFormat: _df,
-                  onEdit: () => _openHistoryEditor(record: item),
+                  onEdit: () {
+                    // El TextEditor maneja la edición internamente
+                    // No se necesita acción adicional
+                  },
                   onSaved: () {
-                    // Recargar solo si no hay cache local
-                    if (_cachedHistories.isEmpty) {
-                      setState(() {
-                        _future = _fetchHistories();
-                      });
-                    }
+                    // Recargar datos para actualizar la información del paciente y el cache
+                    setState(() {
+                      _future = _fetchHistories();
+                      _patientFuture = _fetchPatient();
+                    });
                   },
                   onDeleted: () {
                     // Eliminar del cache local de manera eficiente
@@ -513,12 +593,16 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
             '$label: ',
             style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1F2937),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1F2937),
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
             ),
           ),
         ],
@@ -1245,221 +1329,6 @@ class _OptimizedHistoriasPageState extends State<OptimizedHistoriasPage> {
   }
 }
 
-/// Editor de historias médicas
-class _HistoryEditor extends StatefulWidget {
-  final String clinicId;
-  final String historyNumber;
-  final Map<String, dynamic>? record;
-
-  const _HistoryEditor({
-    required this.clinicId,
-    required this.historyNumber,
-    this.record,
-  });
-
-  @override
-  State<_HistoryEditor> createState() => _HistoryEditorState();
-}
-
-class _HistoryEditorState extends State<_HistoryEditor> {
-  late QuillController _controller;
-  late TextEditingController _titleCtrl, _dxCtrl;
-  String _dept = 'MED';
-  bool _locked = false;
-  DateTime _date = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeController();
-    _titleCtrl = TextEditingController(text: widget.record?['title'] ?? '');
-    _dxCtrl = TextEditingController(text: widget.record?['doctor'] ?? '');
-    _dept = (widget.record?['department_code'] ?? 'MED').toString();
-    _locked = widget.record?['locked'] == true;
-    _date = DateTime.tryParse(widget.record?['date']?.toString() ?? '') ??
-        DateTime.now();
-  }
-
-  void _initializeController() {
-    // Usar DataService para limpiar el contenido Delta
-    final deltaData = DataService.cleanDelta(widget.record?['content_delta']);
-
-    _controller = QuillController(
-      document: Document.fromJson(deltaData),
-      selection: const TextSelection.collapsed(offset: 0),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _titleCtrl.dispose();
-    _dxCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    // Usar DataService para obtener el texto plano del contenido
-    final summaryText = DataService.getPlainText(
-      _controller.document.toDelta().toJson(),
-    );
-
-    final payload = {
-      'clinic_id': widget.clinicId,
-      'patient_id': widget.historyNumber,
-      'date': _date.toIso8601String().substring(0, 10),
-      'title': _titleCtrl.text.isEmpty ? null : _titleCtrl.text,
-      'summary': summaryText.isEmpty ? null : summaryText,
-      'doctor': _dxCtrl.text.isEmpty ? null : _dxCtrl.text,
-      'department_code': _dept,
-      'locked': _locked,
-      'notes': jsonEncode(_controller.document.toDelta().toJson()),
-      'created_by': null,
-    };
-
-    try {
-      if (widget.record == null) {
-        await _supa.from('medical_records').insert(payload);
-      } else {
-        await _supa
-            .from('medical_records')
-            .update(payload)
-            .eq('id', widget.record!['id']);
-      }
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.record == null
-              ? 'Nuevo bloque de historia'
-              : 'Editar historia',
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          ElevatedButton.icon(
-            onPressed: _editPatient,
-            icon: const Icon(Iconsax.edit),
-            label: const Text('Editar Paciente'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: _save,
-            icon: const Icon(Iconsax.save_2),
-            label: const Text('Guardar'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary500,
-              foregroundColor: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Campos de entrada
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _titleCtrl,
-                    decoration: const InputDecoration(labelText: 'Título'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _dept,
-                    decoration: const InputDecoration(
-                      labelText: 'Departamento',
-                    ),
-                    items: const ['MED', 'DERM', 'CIR', 'LAB']
-                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                        .toList(),
-                    onChanged: (v) => setState(() => _dept = v ?? 'MED'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Switch personalizado en lugar de SwitchListTile
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Switch(
-                        value: _locked,
-                        onChanged: (v) => setState(() => _locked = v),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('Bloquear'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: _dxCtrl,
-              decoration: const InputDecoration(labelText: 'Diagnóstico'),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Editor Quill
-            QuillSimpleToolbar(controller: _controller),
-
-            const SizedBox(height: 8),
-
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppTheme.neutral200),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: QuillEditor.basic(controller: _controller),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _editPatient() {
-    // TODO: Implementar edición de paciente
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Editar Paciente (pendiente)')),
-    );
-  }
-}
-
 /// Formulario para crear un nuevo paciente
 class _NewPatientForm extends StatefulWidget {
   final String clinicId;
@@ -1609,6 +1478,55 @@ class _NewPatientFormState extends State<_NewPatientForm> {
     return nextNumber.toString().padLeft(6, '0');
   }
 
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    String? text,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    return Tooltip(
+      message: text ?? '',
+      child: GestureDetector(
+        onTap: onTap ?? () {},
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: onTap != null
+                ? color.withValues(alpha: .1)
+                : const Color(0xFFE5E7EB).withValues(alpha: .5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: onTap != null
+                  ? color.withValues(alpha: .3)
+                  : const Color(0xFF6B7280).withValues(alpha: .3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: onTap != null ? color : const Color(0xFF6B7280),
+              ),
+              if (text != null) ...[
+                const SizedBox(width: 6),
+                Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: onTap != null ? color : const Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1617,20 +1535,11 @@ class _NewPatientFormState extends State<_NewPatientForm> {
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
-          ElevatedButton.icon(
-            onPressed: _isLoading ? null : _savePatient,
-            icon: _isLoading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Iconsax.save_2),
-            label: const Text('Guardar'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4F46E5),
-              foregroundColor: Colors.white,
-            ),
+          _buildQuickActionButton(
+            icon: Iconsax.save_2,
+            text: 'Guardar',
+            color: const Color(0xFF4F46E5),
+            onTap: _isLoading ? null : _savePatient,
           ),
           const SizedBox(width: 8),
         ],

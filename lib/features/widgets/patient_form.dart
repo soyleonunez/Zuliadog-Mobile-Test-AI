@@ -184,24 +184,12 @@ class _ModernPatientFormState extends State<ModernPatientForm> {
       };
 
       // Creando paciente
-      final patientResponse =
-          await _supa.from('patients').insert(patientData).select().single();
+      await _supa.from('patients').insert(patientData).select().single();
 
       // Paciente creado exitosamente
       _showSuccess('Paciente creado exitosamente');
 
-      // Navegar directamente a las historias médicas del paciente recién creado
-      if (mounted) {
-        Navigator.pushNamed(
-          context,
-          '/historias',
-          arguments: {
-            'patient_id': patientResponse['id'],
-            'historyNumber': patientResponse['history_number'],
-          },
-        );
-      }
-
+      // Llamar al callback para notificar que el paciente fue creado
       if (widget.onPatientCreated != null) {
         widget.onPatientCreated!();
       }

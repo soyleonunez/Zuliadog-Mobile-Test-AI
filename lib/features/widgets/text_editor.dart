@@ -165,6 +165,42 @@ class _TextEditorState extends State<TextEditor> {
         _updateLockStatus(false);
       }
     });
+
+    // Auto-borrar placeholders al iniciar edición
+    _clearPlaceholders();
+  }
+
+  void _clearPlaceholders() {
+    // Limpiar placeholders de los campos de texto
+    if (_titleController.text.contains('Escribe el título')) {
+      _titleController.clear();
+    }
+    if (_doctorController.text.contains('Nombre del médico')) {
+      _doctorController.clear();
+    }
+
+    // Limpiar placeholders de los editores Quill
+    _clearQuillPlaceholder(_summaryController, 'Escribe el resumen');
+    _clearQuillPlaceholder(_contentDeltaController, 'Escribe las acotaciones');
+  }
+
+  void _onTitleFocus() {
+    if (_titleController.text.contains('Escribe el título')) {
+      _titleController.clear();
+    }
+  }
+
+  void _onDoctorFocus() {
+    if (_doctorController.text.contains('Nombre del médico')) {
+      _doctorController.clear();
+    }
+  }
+
+  void _clearQuillPlaceholder(QuillController controller, String placeholder) {
+    final text = controller.document.toPlainText();
+    if (text.contains(placeholder)) {
+      controller.clear();
+    }
   }
 
   Future<void> _updateLockStatus(bool locked) async {
@@ -246,14 +282,42 @@ class _TextEditorState extends State<TextEditor> {
 
     try {
       // Buscar archivos adjuntos en la tabla de documents
-      final response = await _supa
+      final documentsResponse = await _supa
           .from('documents')
           .select('*')
           .eq('clinic_id', widget.clinicId!)
           .eq('record_id', widget.recordId);
 
+      // Buscar documentos de laboratorio relacionados por history_number
+      final labDocumentsResponse = await _supa
+          .from('lab_documents')
+          .select('*')
+          .eq('clinic_id', widget.clinicId!)
+          .eq('history_number', widget.data['patient_id'] ?? '');
+
+      // Combinar ambos tipos de documentos
+      final allFiles = <Map<String, dynamic>>[];
+
+      // Agregar documentos médicos
+      allFiles.addAll(List<Map<String, dynamic>>.from(documentsResponse));
+
+      // Agregar documentos de laboratorio (convertir formato)
+      for (final labDoc in labDocumentsResponse) {
+        allFiles.add({
+          'id': labDoc['id'],
+          'file_name': labDoc['file_name'],
+          'file_path': labDoc['file_path'],
+          'file_size': labDoc['file_size'] ?? 0,
+          'file_type': labDoc['file_type'],
+          'uploaded_at': labDoc['created_at'],
+          'source': 'laboratorio', // Marcar como documento de laboratorio
+          'title': labDoc['title'],
+          'status': labDoc['status'],
+        });
+      }
+
       setState(() {
-        _attachedFiles = List<Map<String, dynamic>>.from(response);
+        _attachedFiles = allFiles;
         _isLoadingAttachments = false;
       });
     } catch (e) {
@@ -353,13 +417,22 @@ class _TextEditorState extends State<TextEditor> {
         (file) => file['id'] == attachmentId,
       );
 
-      // Eliminar de Supabase Storage
-      await _supa.storage
-          .from('medical_files')
-          .remove([attachment['file_path']]);
+      // Eliminar de Supabase Storage según el tipo
+      if (attachment['source'] == 'laboratorio') {
+        await _supa.storage
+            .from('lab_results')
+            .remove([attachment['file_path']]);
 
-      // Eliminar de la base de datos
-      await _supa.from('documents').delete().eq('id', attachmentId);
+        // Eliminar de lab_documents
+        await _supa.from('lab_documents').delete().eq('id', attachmentId);
+      } else {
+        await _supa.storage
+            .from('medical_files')
+            .remove([attachment['file_path']]);
+
+        // Eliminar de documents
+        await _supa.from('documents').delete().eq('id', attachmentId);
+      }
 
       // Recargar archivos adjuntos
       await _loadAttachedFiles();
@@ -376,10 +449,20 @@ class _TextEditorState extends State<TextEditor> {
 
   Future<void> _downloadAttachment(Map<String, dynamic> attachment) async {
     try {
-      // Obtener URL de descarga
-      final url = _supa.storage
-          .from('medical_files')
-          .getPublicUrl(attachment['file_path']);
+      String url;
+
+      // Determinar el bucket según el tipo de documento
+      if (attachment['source'] == 'laboratorio') {
+        // Documento de laboratorio
+        url = _supa.storage
+            .from('lab_results')
+            .getPublicUrl(attachment['file_path']);
+      } else {
+        // Documento médico regular
+        url = _supa.storage
+            .from('medical_files')
+            .getPublicUrl(attachment['file_path']);
+      }
 
       // TODO: Implementar descarga real
       // Por ahora solo mostramos la URL
@@ -631,6 +714,51 @@ class _TextEditorState extends State<TextEditor> {
     }
   }
 
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    String? text,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: text ?? '',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: color.withValues(alpha: .3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: color,
+              ),
+              if (text != null) ...[
+                const SizedBox(width: 6),
+                Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Usar visit_date si date no existe
@@ -772,6 +900,7 @@ class _TextEditorState extends State<TextEditor> {
                             const SizedBox(height: 6),
                             TextFormField(
                               controller: _titleController,
+                              onTap: _onTitleFocus,
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 contentPadding: EdgeInsets.symmetric(
@@ -804,6 +933,7 @@ class _TextEditorState extends State<TextEditor> {
                             const SizedBox(height: 6),
                             TextFormField(
                               controller: _doctorController,
+                              onTap: _onDoctorFocus,
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 contentPadding: EdgeInsets.symmetric(
@@ -983,23 +1113,18 @@ class _TextEditorState extends State<TextEditor> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      ElevatedButton(
-                        onPressed: _save,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3B82F6),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                        ),
-                        child: const Text('Guardar'),
+                      _buildQuickActionButton(
+                        icon: Iconsax.save_2,
+                        text: 'Guardar',
+                        color: const Color(0xFF3B82F6),
+                        onTap: _save,
                       ),
                       const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: _cancelEditing,
-                        style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF3B82F6),
-                        ),
-                        child: const Text('Cancelar'),
+                      _buildQuickActionButton(
+                        icon: Iconsax.close_circle,
+                        text: 'Cancelar',
+                        color: const Color(0xFF6B7280),
+                        onTap: _cancelEditing,
                       ),
                     ],
                   ),
@@ -1071,15 +1196,11 @@ class _TextEditorState extends State<TextEditor> {
                               ),
                             ),
                             const Spacer(),
-                            TextButton.icon(
-                              onPressed: _pickFiles,
-                              icon: const Icon(Iconsax.add, size: 16),
-                              label: const Text('Seleccionar'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: const Color(0xFF3B82F6),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                              ),
+                            _buildQuickActionButton(
+                              icon: Iconsax.add,
+                              text: 'Seleccionar',
+                              color: const Color(0xFF3B82F6),
+                              onTap: _pickFiles,
                             ),
                           ],
                         ),
@@ -1262,16 +1383,40 @@ class _TextEditorState extends State<TextEditor> {
                           if (_selectedFiles.isNotEmpty)
                             SizedBox(
                               width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _uploadFiles,
-                                icon: const Icon(Iconsax.cloud_add, size: 16),
-                                label: Text(
-                                    'Subir ${_selectedFiles.length} archivo(s)'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF3B82F6),
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF3B82F6)
+                                      .withValues(alpha: .1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFF3B82F6)
+                                        .withValues(alpha: .3),
+                                  ),
+                                ),
+                                child: InkWell(
+                                  onTap: _uploadFiles,
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Iconsax.cloud_add,
+                                        size: 16,
+                                        color: Color(0xFF3B82F6),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Subir ${_selectedFiles.length} archivo(s)',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF3B82F6),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
