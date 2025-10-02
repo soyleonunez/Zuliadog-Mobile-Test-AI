@@ -15,6 +15,8 @@ import 'package:zuliadog/features/utilities/tickets.dart';
 import 'package:zuliadog/features/utilities/reportes.dart';
 import 'package:zuliadog/core/config.dart';
 import 'package:zuliadog/features/auth/welcome_screen.dart';
+import 'package:zuliadog/mobile/screens/mobile_onboarding_screen.dart';
+import 'package:zuliadog/mobile/core/mobile_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +44,8 @@ void main() async {
 
   // Inicializar Supabase con la nueva configuración
   await AppConfig.initializeSupabase();
+
+  // Determinar si es una app móvil basado en el tamaño de pantalla inicial
   runApp(const ZuliadogApp());
 }
 
@@ -52,7 +56,7 @@ class ZuliadogApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
+      theme: MobileTheme.light(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -60,10 +64,10 @@ class ZuliadogApp extends StatelessWidget {
         FlutterQuillLocalizations.delegate,
       ],
       supportedLocales: const [
-        Locale('es', 'ES'), // Español
-        Locale('en', 'US'), // Inglés
+        Locale('es', 'ES'),
+        Locale('en', 'US'),
       ],
-      home: const WelcomeScreen(),
+      home: const MobileOnboardingScreen(),
       routes: {
         '/home': (context) => const HomeScreen(),
         VisorMedicoPage.route: (context) => const VisorMedicoPage(),
@@ -86,34 +90,7 @@ class ZuliadogApp extends StatelessWidget {
         ReportesPage.route: (context) => const ReportesPage(),
       },
       builder: (context, child) {
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            // Tamaño mínimo de ventana recomendado
-            const minWidth = 1200.0;
-            const minHeight = 800.0;
-
-            // Si la ventana es muy pequeña, mostrar contenido con scroll
-            if (constraints.maxWidth < minWidth ||
-                constraints.maxHeight < minHeight) {
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SingleChildScrollView(
-                  child: SizedBox(
-                    width: constraints.maxWidth < minWidth
-                        ? minWidth
-                        : constraints.maxWidth,
-                    height: constraints.maxHeight < minHeight
-                        ? minHeight
-                        : constraints.maxHeight,
-                    child: child,
-                  ),
-                ),
-              );
-            }
-
-            return child ?? const SizedBox();
-          },
-        );
+        return child ?? const SizedBox();
       },
     );
   }
